@@ -25,11 +25,9 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
   size?: Size;
   loading?: boolean;
   icon?: React.ReactNode;
-  /** Square, icon-only button. Requires aria-label. */
   iconOnly?: boolean;
 }
 
-/** The app's button: primary / secondary / ghost / danger, three sizes, optional icon and loading spinner. */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
   {
     variant = "secondary",

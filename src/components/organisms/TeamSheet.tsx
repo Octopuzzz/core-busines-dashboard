@@ -16,34 +16,28 @@ interface Props {
   open: boolean;
   onClose: () => void;
   group: Group | null;
-  /** "new" opens straight into a blank team. */
   mode: "edit" | "new";
   onSave: (group: Group) => void;
   onDelete: (id: string) => void;
-  /** Jira login status — unlinked members can only be searched when this is "live". */
   jira: JiraConnection;
 }
 
-/** Teams from src/config/teams.ts can be edited but not deleted. */
 const isBuiltInTeam = (id: string) => DEFAULT_TEAMS.some((team) => team.id === id);
 
 const sourceOf = (person: JiraPerson): Member["source"] =>
   person.accountId.startsWith("sample:") ? "sample" : "jira";
 
-/** Second line under an unlinked member's name, depending on the Jira connection. */
 function unlinkedMessage(jira: JiraConnection) {
   if (jira === "live") return "No Jira account matched this name";
   if (jira === "error") return "Waiting for Jira login";
   return "Waiting for Jira";
 }
 
-/** Side sheet to create or edit a team: name, members (linked to Jira accounts), delete. */
 export function TeamSheet({ open, onClose, group, mode, onSave, onDelete, jira }: Props) {
   const toast = useToast();
   const [draft, setDraft] = useState<Group | null>(null);
 
   useEffect(() => {
-    // Start from a fresh copy every time the sheet opens, so Cancel discards changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reset the draft each time the sheet opens
     if (open) setDraft(mode === "new" || !group ? newGroup("") : structuredClone(group));
   }, [open, mode, group]);
@@ -60,7 +54,6 @@ export function TeamSheet({ open, onClose, group, mode, onSave, onDelete, jira }
     setMembers([...draft.members, { name: person.displayName, person, source: sourceOf(person) }]);
   };
 
-  /** Attach a Jira account to a member that was configured by name only. */
   const linkMember = (memberName: string, person: JiraPerson) =>
     setMembers(
       draft.members.map((member) =>
@@ -183,7 +176,6 @@ export function TeamSheet({ open, onClose, group, mode, onSave, onDelete, jira }
   );
 }
 
-/** One member line: avatar, name, link status, a "Link" search for unlinked members, remove. */
 function MemberRow({
   member,
   jira,

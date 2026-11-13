@@ -8,22 +8,33 @@ import {
   useStorageStatus,
 } from "@/hooks/useGroups";
 import { useIssues } from "@/hooks/useIssues";
+import { useSavedQueries } from "@/hooks/useSavedQueries";
 import {
   DEFAULT_SETTINGS,
   resolvedPeople,
+  type Group,
   type SavedView,
   type TeamSettings,
 } from "@/lib/groups/store";
-import { computeMetrics } from "@/lib/metrics";
+import { computeMetrics, type Metrics } from "@/lib/metrics";
+import { savedQueryStore } from "@/lib/queries/store";
 import { periodLabel, rangeDates } from "@/lib/range";
 import type { Issue, IssueQuery, JiraPerson, JiraProject } from "@/lib/jira/types";
-import { SavedViews, useToast } from "../molecules";
+import {
+  RefreshVeil,
+  RevealEdge,
+  SavedViews,
+  SyncIndicator,
+  useToast,
+  type SyncPhase,
+} from "../molecules";
 import {
   ChartsGrid,
   ConnectionBanner,
   ExportDialog,
   FilterBar,
   IssueList,
+  JqlEditor,
   KpiGrid,
   TeamHeader,
   TeamSheet,
@@ -34,13 +45,11 @@ import {
 } from "../organisms";
 import { DashboardTemplate } from "../templates/DashboardTemplate";
 
-/** localStorage key for the team that was open last. */
 const ACTIVE_TEAM_KEY = "kopnus.jira.activeTeam";
 const DEFAULT_TEAM_ID = "core-engineering";
-/** Wait this long after the last filter change before saving the team's settings. */
 const SETTINGS_SAVE_DELAY_MS = 400;
+const SYNC_SUMMARY_MS = 2800;
 
-/** Response of GET /api/jira/status. */
 interface JiraStatus {
   configured: boolean;
   site: string | null;
@@ -50,11 +59,6 @@ interface JiraStatus {
 
 const sameSettings = (a: TeamSettings, b: TeamSettings) => JSON.stringify(a) === JSON.stringify(b);
 
-/* ------------------------------------------------------------------------------------------ */
-/* Pure helpers                                                                                */
-/* ------------------------------------------------------------------------------------------ */
-
-/** Does the issue match the free-text search? Checks key, summary, assignee, status, parent, labels. */
 function matchesSearch(issue: Issue, searchText: string): boolean {
   if (!searchText) return true;
   const contains = (value: string | undefined) =>
@@ -70,7 +74,6 @@ function matchesSearch(issue: Issue, searchText: string): boolean {
   );
 }
 
-/** Applies the people filter, the chart click-filters and the text search (all client-side). */
 function filterIssues(
   issues: Issue[],
   selectedPeople: string[],
@@ -87,7 +90,6 @@ function filterIssues(
   });
 }
 
-/** Removable chips for the active chart filters. */
 function buildChartChips(
   chartFilter: ChartFilter,
   members: JiraPerson[],
@@ -115,7 +117,6 @@ function buildChartChips(
   return chips;
 }
 
-/** Jira connection state shown in the top bar and banner. */
 function connectionState(
   status: JiraStatus | null,
   authError: string | null,
@@ -127,25 +128,18 @@ function connectionState(
   return "live";
 }
 
-/** Where member lookups come from: sample data, live Jira, or nowhere yet (unknown / login failed). */
 function memberSourceOf(status: JiraStatus | null): "jira" | "sample" | null {
   if (!status) return null;
   if (!status.configured) return "sample";
   return status.authOk ? "jira" : null;
 }
 
-/* ------------------------------------------------------------------------------------------ */
-/* Page                                                                                        */
-/* ------------------------------------------------------------------------------------------ */
+interface TeamDashboardProps {
+  initialTeams?: Group[] | null;
+}
 
-/**
- * The whole dashboard page. Owns all state — which team is open, its query (filters), Jira data,
- * and which dialogs are open. Everything it renders is presentational.
- */
-export function TeamDashboard() {
-  /* ---- State ------------------------------------------------------------------------- */
-
-  const { groups, save, remove } = useGroups();
+export function TeamDashboard({ initialTeams }: TeamDashboardProps = {}) {
+  const { groups, save, remove } = useGroups(initialTeams);
   const storage = useStorageStatus();
   const toast = useToast();
 
@@ -154,19 +148,14 @@ export function TeamDashboard() {
   const [activeTeamId, setActiveTeamId] = useState<string>(DEFAULT_TEAM_ID);
   const [teamSheetMode, setTeamSheetMode] = useState<"edit" | "new" | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  const [showJql, setShowJql] = useState(false);
+  const [jqlOpen, setJqlOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [chartFilter, setChartFilter] = useState<ChartFilter>({});
 
-  // The team's query. Restored from, and auto-saved to, the team's settings.
   const [settings, setSettings] = useState<TeamSettings>(DEFAULT_SETTINGS);
-  const [jqlDraft, setJqlDraft] = useState("");
   const updateSettings = (changes: Partial<TeamSettings>) =>
     setSettings((current) => ({ ...current, ...changes }));
-  // Keeps typing responsive: filtering runs on a slightly delayed copy of the search text.
   const deferredSearch = useDeferredValue(settings.search);
-
-  /* ---- Data loading ------------------------------------------------------------------ */
 
   useEffect(() => {
     fetch("/api/jira/status")
@@ -200,9 +189,6 @@ export function TeamDashboard() {
     } catch {}
   };
 
-  /* ---- Team settings persistence ----------------------------------------------------- */
-
-  // Restore the team's saved query when the team (or storage) first becomes available.
   const settingsLoadedFor = useRef<string | null>(null);
   useEffect(() => {
     if (!team || settingsLoadedFor.current === team.id) return;
@@ -210,12 +196,9 @@ export function TeamDashboard() {
     const restored = { ...DEFAULT_SETTINGS, ...team.settings };
 
     setSettings(restored);
-    setJqlDraft(restored.jql);
-    setShowJql(!!restored.jql);
     setChartFilter({});
   }, [team]);
 
-  // Save the query back to the team (debounced) whenever it changes.
   useEffect(() => {
     if (!team || settingsLoadedFor.current !== team.id) return;
     if (team.settings && sameSettings(team.settings, settings)) return;
@@ -223,37 +206,42 @@ export function TeamDashboard() {
     return () => clearTimeout(timer);
   }, [settings, team, save]);
 
-  /* ---- Saved views ------------------------------------------------------------------- */
+  const { queries: views, save: saveQuery, remove: removeQuery } = useSavedQueries();
 
-  const views = team?.views ?? [];
-  const activeViewId = views.find((view) => sameSettings(view.settings, settings))?.id ?? null;
+  useEffect(() => {
+    savedQueryStore.setErrorHandler((message) => toast("error", message));
+    return () => savedQueryStore.setErrorHandler(null);
+  }, [toast]);
+
+  const memberIds = useMemo(() => new Set(members.map((person) => person.accountId)), [members]);
+  const forThisTeam = (query: TeamSettings): TeamSettings => ({
+    ...DEFAULT_SETTINGS,
+    ...query,
+    people: query.people.filter((id) => memberIds.has(id)),
+  });
+  const activeViewId =
+    views.find((view) => sameSettings(forThisTeam(view.settings), settings))?.id ?? null;
 
   const applyView = (view: SavedView) => {
-    setSettings(view.settings);
-    setJqlDraft(view.settings.jql);
-    setShowJql(!!view.settings.jql);
+    const next = forThisTeam(view.settings);
+    setSettings(next);
     setChartFilter({});
+    const skipped = view.settings.people.length - next.people.length;
+    if (skipped > 0) {
+      toast(
+        "success",
+        `“${view.name}” applied — ${skipped} ${skipped === 1 ? "person isn't" : "people aren't"} in ${team?.name ?? "this team"}`,
+      );
+    }
   };
 
   const saveView = (name: string) => {
-    if (!team) return;
-    const view: SavedView = {
-      id: crypto.randomUUID(),
-      name,
-      settings,
-      createdAt: new Date().toISOString(),
-    };
-    // Saving under an existing name replaces that view.
-    const otherViews = views.filter((existing) => existing.name !== name);
-    save({ ...team, settings, views: [...otherViews, view] });
-    toast("success", `View “${name}” saved`);
+    const replaced = views.some((view) => view.name.toLowerCase() === name.toLowerCase());
+    saveQuery(name, settings);
+    toast("success", replaced ? `Query “${name}” updated` : `Query “${name}” saved`);
   };
 
-  const deleteView = (id: string) => {
-    if (team) save({ ...team, views: views.filter((view) => view.id !== id) });
-  };
-
-  /* ---- Derived data ------------------------------------------------------------------ */
+  const deleteView = (id: string) => removeQuery(id);
 
   const dates = rangeDates(settings.range);
   const issueQuery: IssueQuery | null = useMemo(() => {
@@ -267,6 +255,23 @@ export function TeamDashboard() {
       jql: settings.jql || undefined,
     };
   }, [members, settings.projectKeys, dates?.from, dates?.to, settings.jql]);
+
+  const jqlScope = useMemo(
+    () =>
+      issueQuery && {
+        accountIds: issueQuery.accountIds,
+        projectKeys: issueQuery.projectKeys,
+        from: issueQuery.from,
+        to: issueQuery.to,
+      },
+    [issueQuery],
+  );
+
+  const saveJqlQuery = (name: string, jql: string) => {
+    const replaced = views.some((view) => view.name.toLowerCase() === name.toLowerCase());
+    saveQuery(name, { ...settings, jql });
+    toast("success", replaced ? `Query “${name}” updated` : `Query “${name}” saved`);
+  };
 
   const { data, loading, error: fetchError } = useIssues(issueQuery, reloadKey);
   const allIssues = useMemo(() => data?.issues ?? [], [data]);
@@ -286,13 +291,44 @@ export function TeamDashboard() {
       : null;
   const connection = connectionState(jiraStatus, authError, fetchError);
 
+  const syncing = loading && !!data;
+  const [wasSyncing, setWasSyncing] = useState(false);
+  const [sync, setSync] = useState<SyncPhase>({ phase: "idle" });
+  const [baseline, setBaseline] = useState<{ metrics: Metrics; total: number } | null>(null);
+  const [revealKey, setRevealKey] = useState(0);
+
+  if (syncing !== wasSyncing) {
+    setWasSyncing(syncing);
+    if (syncing) {
+      setBaseline({ metrics, total: allIssues.length });
+      setSync({ phase: "syncing" });
+    } else if (fetchError) {
+      setBaseline(null);
+      setSync({ phase: "idle" });
+    } else {
+      setSync({
+        phase: "done",
+        total: allIssues.length,
+        issueDelta: allIssues.length - (baseline?.total ?? allIssues.length),
+      });
+      setRevealKey((key) => key + 1);
+    }
+  }
+
+  useEffect(() => {
+    if (sync.phase !== "done") return;
+    const timer = setTimeout(() => {
+      setSync({ phase: "idle" });
+      setBaseline(null);
+    }, SYNC_SUMMARY_MS);
+    return () => clearTimeout(timer);
+  }, [sync]);
+
   const clearChartFilter = (field: keyof ChartFilter) =>
     setChartFilter((current) => ({ ...current, [field]: undefined }));
   const chips = buildChartChips(chartFilter, members, clearChartFilter);
 
   if (!team) return null;
-
-  /* ---- Render ------------------------------------------------------------------------ */
 
   const errorMessage = authError ?? fetchError;
   let banner: React.ReactNode = null;
@@ -339,12 +375,8 @@ export function TeamDashboard() {
             onProjects={(projectKeys) => updateSettings({ projectKeys })}
             range={settings.range}
             onRange={(range) => updateSettings({ range })}
-            showJql={showJql}
-            onToggleJql={() => setShowJql((shown) => !shown)}
-            jqlDraft={jqlDraft}
-            onJqlDraft={setJqlDraft}
             jqlActive={!!settings.jql}
-            onApplyJql={() => updateSettings({ jql: jqlDraft.trim() })}
+            onOpenJql={() => setJqlOpen(true)}
             loading={loading}
             onReload={() => setReloadKey((key) => key + 1)}
             chips={chips}
@@ -359,7 +391,15 @@ export function TeamDashboard() {
             }
           />
         }
-        kpis={<KpiGrid metrics={metrics} />}
+        kpis={
+          <KpiGrid metrics={metrics} deltaFrom={sync.phase === "done" ? baseline?.metrics : null} />
+        }
+        overlay={
+          <>
+            <RefreshVeil active={syncing} />
+            <RevealEdge play={revealKey} />
+          </>
+        }
         charts={
           <ChartsGrid
             metrics={metrics}
@@ -384,6 +424,19 @@ export function TeamDashboard() {
           remove(id);
           openTeam(DEFAULT_TEAM_ID);
         }}
+      />
+
+      <SyncIndicator state={sync} />
+
+      <JqlEditor
+        open={jqlOpen}
+        onClose={() => setJqlOpen(false)}
+        value={settings.jql}
+        teamName={team.name}
+        scope={jqlScope}
+        savedQueries={views}
+        onApply={(jql) => updateSettings({ jql })}
+        onSave={saveJqlQuery}
       />
 
       <ExportDialog

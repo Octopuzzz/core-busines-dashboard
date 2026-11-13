@@ -9,14 +9,12 @@ import { Popover } from "./Popover";
 
 interface Props {
   views: SavedView[];
-  /** id of the view whose settings equal the current filters, if any. */
   activeId: string | null;
   onApply: (v: SavedView) => void;
   onSave: (name: string) => void;
   onDelete: (id: string) => void;
 }
 
-/** “Views” menu: apply, delete, or save the current filters as a named view for the team. */
 export function SavedViews({ views, activeId, onApply, onSave, onDelete }: Props) {
   const [name, setName] = useState("");
   const activeView = views.find((view) => view.id === activeId);
@@ -31,11 +29,11 @@ export function SavedViews({ views, activeId, onApply, onSave, onDelete }: Props
           aria-expanded={open}
           onClick={toggle}
           icon={<Bookmark className="size-4" />}
-          title="Saved views"
+          title="Saved queries"
           className="max-w-48"
         >
           <span className="hidden truncate sm:inline">
-            {activeView ? activeView.name : "Views"}
+            {activeView ? activeView.name : "Queries"}
           </span>
         </Button>
       )}
@@ -43,10 +41,10 @@ export function SavedViews({ views, activeId, onApply, onSave, onDelete }: Props
       {(close) => (
         <div>
           <p className="px-2 pt-1 pb-1.5 text-[11px] font-medium tracking-[0.07em] text-muted uppercase">
-            Saved views
+            Saved queries
           </p>
           {views.length === 0 && (
-            <p className="px-2 pb-2 text-sm text-muted">No saved views yet.</p>
+            <p className="px-2 pb-2 text-sm text-muted">No saved queries yet.</p>
           )}
           <ul className="max-h-60 overflow-y-auto">
             {views.map((view) => (
@@ -74,7 +72,7 @@ export function SavedViews({ views, activeId, onApply, onSave, onDelete }: Props
                   variant="ghost"
                   size="sm"
                   iconOnly
-                  aria-label={`Delete view ${view.name}`}
+                  aria-label={`Delete query ${view.name}`}
                   icon={<Trash2 className="size-3.5" />}
                   className="opacity-60 group-hover:opacity-100"
                   onClick={() => onDelete(view.id)}
@@ -95,10 +93,10 @@ export function SavedViews({ views, activeId, onApply, onSave, onDelete }: Props
           >
             <input
               autoFocus
-              aria-label="View name"
+              aria-label="Query name"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Name this view…"
+              placeholder="Name this query…"
               className="h-8 min-w-0 flex-1 rounded-md border border-line bg-surface px-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-accent"
             />
             <Button
@@ -112,8 +110,8 @@ export function SavedViews({ views, activeId, onApply, onSave, onDelete }: Props
             </Button>
           </form>
           <p className="px-1 pt-2 text-[11px] leading-relaxed text-muted">
-            Saves search, people, projects, dates and JQL for the whole team. Your last filters are
-            also remembered automatically.
+            Saves search, people, projects, dates and JQL. Shared across all teams — people who
+            aren&apos;t in the open team are skipped. Saving an existing name updates it.
           </p>
         </div>
       )}

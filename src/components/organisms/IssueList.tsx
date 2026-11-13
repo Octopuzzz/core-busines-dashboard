@@ -20,7 +20,6 @@ interface SortState {
 const PAGE_SIZES = ["20", "50", "100"] as const;
 type PageSize = (typeof PAGE_SIZES)[number];
 
-/** The text each sortable column is compared by. Missing due dates sort last. */
 const sortValue: Record<SortKey, (issue: Issue) => string> = {
   key: (issue) => issue.key,
   assignee: (issue) => issue.assignee?.displayName ?? "",
@@ -31,15 +30,11 @@ const sortValue: Record<SortKey, (issue: Issue) => string> = {
 
 function sortIssues(issues: Issue[], sort: SortState): Issue[] {
   const valueOf = sortValue[sort.key];
-  // numeric: true → "PROJ-9" sorts before "PROJ-10".
   return [...issues].sort(
     (a, b) => sort.direction * valueOf(a).localeCompare(valueOf(b), undefined, { numeric: true }),
   );
 }
 
-/* ---- Small cell components ------------------------------------------------------------ */
-
-/** Issue key, linked to Jira (plain text for sample data). */
 function KeyLink({ issue }: { issue: Issue }) {
   const keyClass = "font-mono text-[12.5px] text-accent whitespace-nowrap";
   if (issue.url === "#") return <span className={keyClass}>{issue.key}</span>;
@@ -55,7 +50,6 @@ function KeyLink({ issue }: { issue: Issue }) {
   );
 }
 
-/** "↳ PARENT-1 Parent summary" line under an issue's summary. */
 function ParentLine({ parent }: { parent: NonNullable<Issue["parent"]> }) {
   return (
     <div
@@ -80,7 +74,6 @@ function ParentLine({ parent }: { parent: NonNullable<Issue["parent"]> }) {
   );
 }
 
-/** Due date, in red when overdue (with "Overdue by N days" on hover). */
 function DueDate({ issue }: { issue: Issue }) {
   if (!issue.due) return <span className="text-muted">—</span>;
   const late = isOverdue(issue);
@@ -101,7 +94,6 @@ function StatusLabel({ issue }: { issue: Issue }) {
   );
 }
 
-/** Column header; clickable (and shows an arrow) when the column is sortable. */
 function ColumnHeader({
   sortKey,
   sort,
@@ -142,9 +134,6 @@ function ColumnHeader({
   );
 }
 
-/* ---- Rows ------------------------------------------------------------------------------ */
-
-/** One row of the desktop table. */
 function IssueTableRow({ issue }: { issue: Issue }) {
   return (
     <tr className="border-b border-line/70 transition-colors last:border-0 hover:bg-surface-2">
@@ -181,7 +170,6 @@ function IssueTableRow({ issue }: { issue: Issue }) {
   );
 }
 
-/** One card in the phone layout (replaces the table below the md breakpoint). */
 function IssueCard({ issue }: { issue: Issue }) {
   return (
     <>
@@ -208,15 +196,11 @@ function IssueCard({ issue }: { issue: Issue }) {
   );
 }
 
-/* ---- List ------------------------------------------------------------------------------ */
-
-/** The issue list: sortable, paginated table on desktop, animated cards on phones. */
 export function IssueList({ issues, loading }: { issues: Issue[]; loading: boolean }) {
   const [sort, setSort] = useState<SortState>({ key: "updated", direction: -1 });
   const [pageSize, setPageSize] = useState<PageSize>("20");
   const [page, setPage] = useState(1);
 
-  /** Clicking the sorted column flips direction; a new column starts ascending. */
   const sortBy = (key: SortKey) =>
     setSort((current) => ({
       key,
@@ -227,7 +211,7 @@ export function IssueList({ issues, loading }: { issues: Issue[]; loading: boole
   const sortedIssues = useMemo(() => sortIssues(issues, sort), [issues, sort]);
   const rowsPerPage = Number(pageSize);
   const pageCount = Math.max(1, Math.ceil(sortedIssues.length / rowsPerPage));
-  const currentPage = Math.min(page, pageCount); // filters may shrink the list under the current page
+  const currentPage = Math.min(page, pageCount);
   const pageIssues = sortedIssues.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
 
   const changePageSize = (size: PageSize) => {
@@ -271,7 +255,6 @@ export function IssueList({ issues, loading }: { issues: Issue[]; loading: boole
 
   return (
     <Panel title={title} hint={pageSizePicker}>
-      {/* Desktop table */}
       <div className="-mx-1 hidden overflow-x-auto md:block">
         <table className="w-full min-w-[820px] border-collapse">
           <thead className="border-b border-line">
@@ -304,8 +287,6 @@ export function IssueList({ issues, loading }: { issues: Issue[]; loading: boole
           </tbody>
         </table>
       </div>
-
-      {/* Phone cards */}
       <ul className="md:hidden">
         <AnimatePresence initial={false}>
           {pageIssues.map((issue) => (

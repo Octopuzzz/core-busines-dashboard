@@ -1,4 +1,3 @@
-// Concrete colour values for non-CSS consumers (ECharts canvas, PDF, Excel, PPT).
 import { color, series } from "@/design/tokens";
 
 export const ACCENT = color.light.accent;

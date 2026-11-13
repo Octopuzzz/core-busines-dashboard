@@ -3,7 +3,6 @@
 import { X } from "lucide-react";
 import { motion } from "motion/react";
 
-/** Small removable tag for an active filter. */
 export function FilterChip({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
     <motion.span

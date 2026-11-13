@@ -8,7 +8,6 @@ interface Props {
   description: string;
 }
 
-/** Selectable card for an export format (PDF / Excel / PowerPoint). */
 export function FormatOption({ selected, onSelect, icon, title, description }: Props) {
   return (
     <button

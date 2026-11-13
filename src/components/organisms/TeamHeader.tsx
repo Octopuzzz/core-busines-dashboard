@@ -20,7 +20,6 @@ interface Props {
   sample?: boolean;
 }
 
-/** Big team title, member avatars, and the team tabs. Plays a GSAP intro on load and team switch. */
 export function TeamHeader({ groups, active, period, onSelect, onNew, sample }: Props) {
   const root = useRef<HTMLDivElement>(null);
   const linkedCount = active.members.filter((member) => member.person).length;
@@ -28,8 +27,6 @@ export function TeamHeader({ groups, active, period, onSelect, onNew, sample }: 
   useGSAP(
     () => {
       gsap.matchMedia().add("(prefers-reduced-motion: no-preference)", () => {
-        // fromTo with explicit end states + clearProps: if the intro is interrupted or replayed
-        // (dev double-render, team switch), nothing can be left stuck mid-animation.
         const cleanUp = { clearProps: "transform,opacity,visibility" };
         gsap
           .timeline({ defaults: { ease: "power3.out" } })

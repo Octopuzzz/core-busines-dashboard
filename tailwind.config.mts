@@ -18,7 +18,6 @@ export default {
     },
   },
   plugins: [
-    // Tokens → CSS variables (light + dark), and a few document-level base rules.
     plugin(({ addBase }) => {
       addBase({
         ":root": { ...vars(color.light), colorScheme: "light" },
@@ -30,7 +29,6 @@ export default {
           "-webkit-font-smoothing": "antialiased",
         },
         "h1, h2, h3, p": { textWrap: "pretty" },
-        // Tailwind v4 resets buttons to the default arrow — restore the pointer on everything clickable.
         'button:not(:disabled), [role="button"], [role="option"], [role="radio"], [role="tab"], a[href], summary, select, label:has(> input[type="checkbox"]), input[type="date"]::-webkit-calendar-picker-indicator':
           { cursor: "pointer" },
         'button:disabled, [aria-disabled="true"]': { cursor: "not-allowed" },

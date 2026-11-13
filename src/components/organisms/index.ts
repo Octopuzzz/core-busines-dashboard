@@ -8,3 +8,4 @@ export * from "./ExportDialog";
 export * from "./TeamSheet";
 export * from "./ConnectionBanner";
 export * from "./StatusPanel";
+export * from "./JqlEditor";

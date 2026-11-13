@@ -9,7 +9,6 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
   mono?: boolean;
 }
 
-/** Text input with optional leading icon and trailing content (e.g. a clear button). */
 export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   { leading, trailing, className, mono, ...rest },
   ref,

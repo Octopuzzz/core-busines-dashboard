@@ -14,12 +14,10 @@ interface Toast {
 
 const ToastContext = createContext<(tone: Tone, text: string) => void>(() => {});
 
-/** Returns `toast(tone, text)` for showing a short message at the bottom of the screen. */
 export const useToast = () => useContext(ToastContext);
 
 const TOAST_DURATION_MS = 3600;
 
-/** Hosts the toast stack; wrap the app once (see layout.tsx). */
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<Toast[]>([]);
   const push = useCallback((tone: Tone, text: string) => {

@@ -1,18 +1,8 @@
-/**
- * ECharts option builders.
- *
- * Shared by the live dashboard charts and the PDF export (which renders the same options
- * off-screen), so a chart looks the same on screen and on paper.
- */
 import type { EChartsOption, TooltipComponentOption } from "echarts";
 import type { Metrics } from "./metrics";
 import type { ChartPalette } from "./theme";
 
 const FONT = "var(--font-geist-sans), system-ui, sans-serif";
-
-/* -------------------------------------------------------------------------- */
-/*  Shared building blocks                                                    */
-/* -------------------------------------------------------------------------- */
 
 function baseTooltip(palette: ChartPalette): TooltipComponentOption {
   return {
@@ -23,7 +13,6 @@ function baseTooltip(palette: ChartPalette): TooltipComponentOption {
   };
 }
 
-/** Settings every chart shares: animation, font and tooltip look. */
 function baseOption(palette: ChartPalette, animate: boolean): EChartsOption {
   return {
     animation: animate,
@@ -34,7 +23,6 @@ function baseOption(palette: ChartPalette, animate: boolean): EChartsOption {
   };
 }
 
-/** Legend in the top-right corner with small rounded swatches. */
 function topRightLegend(palette: ChartPalette, swatchHeight: number) {
   return {
     top: 0,
@@ -46,7 +34,6 @@ function topRightLegend(palette: ChartPalette, swatchHeight: number) {
   };
 }
 
-/** A numeric axis with light grid lines. */
 function valueAxis(palette: ChartPalette) {
   return {
     type: "value" as const,
@@ -55,17 +42,11 @@ function valueAxis(palette: ChartPalette) {
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Workload per person                                                       */
-/* -------------------------------------------------------------------------- */
-
-/** Stacked horizontal bars: each person's issues split into To Do / In Progress / Done. */
 export function workloadOption(
   metrics: Metrics,
   palette: ChartPalette,
   animate = true,
 ): EChartsOption {
-  // ECharts draws the first category at the bottom; reverse so the busiest person is on top.
   const people = [...metrics.byPerson].reverse();
 
   const stackedBar = (name: string, field: "todo" | "inProgress" | "done", color: string) => ({
@@ -99,17 +80,9 @@ export function workloadOption(
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Status breakdown                                                          */
-/* -------------------------------------------------------------------------- */
-
 const CATEGORY_LABEL = { new: "To Do", indeterminate: "In Progress", done: "Done" } as const;
 const CATEGORIES = ["new", "indeterminate", "done"] as const;
 
-/**
- * Doughnut with one slice per status category (To Do / In Progress / Done) and the total
- * in the middle. The per-status detail is shown as a list next to it (see StatusPanel).
- */
 export function statusOption(
   metrics: Metrics,
   palette: ChartPalette,
@@ -137,7 +110,7 @@ export function statusOption(
     series: [
       {
         type: "pie",
-        cursor: "default", // display only — the status list is the click target
+        cursor: "default",
         radius: ["62%", "86%"],
         center: ["50%", "50%"],
         padAngle: 2,
@@ -154,16 +127,11 @@ export function statusOption(
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Created vs resolved                                                       */
-/* -------------------------------------------------------------------------- */
-
-/** One smooth line with a faint area fill. */
 function trendLine(name: string, color: string, data: number[]) {
   return {
     name,
     type: "line" as const,
-    cursor: "default", // lines aren't clickable
+    cursor: "default",
     smooth: 0.3,
     symbol: "circle",
     symbolSize: 6,
@@ -175,7 +143,6 @@ function trendLine(name: string, color: string, data: number[]) {
   };
 }
 
-/** Issues created vs resolved per week, last 12 weeks. */
 export function trendOption(
   metrics: Metrics,
   palette: ChartPalette,
@@ -209,11 +176,6 @@ export function trendOption(
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Issue types                                                               */
-/* -------------------------------------------------------------------------- */
-
-/** Vertical bars, one per issue type, each in its own series colour. */
 export function typeOption(metrics: Metrics, palette: ChartPalette, animate = true): EChartsOption {
   return {
     ...baseOption(palette, animate),

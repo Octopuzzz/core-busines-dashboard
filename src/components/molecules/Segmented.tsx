@@ -12,7 +12,6 @@ interface Props<T extends string> {
   ariaLabel: string;
 }
 
-/** Segmented control (a row of mutually exclusive options) with a sliding highlight. */
 export function Segmented<T extends string>({
   value,
   onChange,

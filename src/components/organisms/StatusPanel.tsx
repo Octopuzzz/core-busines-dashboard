@@ -16,21 +16,15 @@ const barColorByCategory = {
 
 interface Props {
   metrics: Metrics;
-  /** Status currently used as a filter (highlighted). */
   active?: string;
   onPick: (status: string) => void;
   className?: string;
 }
 
-/**
- * Status breakdown: a To Do / In Progress / Done doughnut plus every workflow status as a
- * ranked, clickable list (replaces a chart legend that got cropped with many statuses).
- */
 export function StatusPanel({ metrics, active, onPick, className }: Props) {
   const { palette } = useTheme();
   const doughnut = useMemo(() => statusOption(metrics, palette), [metrics, palette]);
 
-  // Scale bars against the largest *open* status, so workflow steps stay visible next to a huge "Done".
   const openCounts = metrics.byStatus
     .filter((status) => status.category !== "done")
     .map((status) => status.count);
@@ -71,7 +65,6 @@ export function StatusPanel({ metrics, active, onPick, className }: Props) {
                   </span>
                   <Mono className="text-xs text-ink-2">{status.count}</Mono>
                   <span className="col-start-2 col-end-4 mt-1 h-1 overflow-hidden rounded-full bg-line">
-                    {/* Bar length is data-driven; set via scaleX so no inline width is needed. */}
                     <span
                       data-bar={scale}
                       ref={(bar) => {

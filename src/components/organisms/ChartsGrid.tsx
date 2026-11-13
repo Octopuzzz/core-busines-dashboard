@@ -12,14 +12,12 @@ import { StatusPanel } from "./StatusPanel";
 
 gsap.registerPlugin(useGSAP);
 
-/** A filter set by clicking a chart (person = accountId). */
 export interface ChartFilter {
   person?: string;
   status?: string;
   type?: string;
 }
 
-/** Height class for the workload chart, by number of people (Tailwind needs literal class names). */
 function workloadHeight(peopleCount: number) {
   if (peopleCount <= 4) return "h-64";
   if (peopleCount <= 7) return "h-80";
@@ -31,11 +29,9 @@ function workloadHeight(peopleCount: number) {
 interface Props {
   metrics: Metrics;
   onFilter: (filter: ChartFilter) => void;
-  /** Status currently used as a filter, highlighted in the status list. */
   activeStatus?: string;
 }
 
-/** The four chart panels: workload, status, created-vs-resolved trend, and issue types. */
 export function ChartsGrid({ metrics, onFilter, activeStatus }: Props) {
   const { palette } = useTheme();
   const root = useRef<HTMLDivElement>(null);
@@ -43,7 +39,6 @@ export function ChartsGrid({ metrics, onFilter, activeStatus }: Props) {
   const workloadChart = useMemo(() => workloadOption(metrics, palette), [metrics, palette]);
   const trendChart = useMemo(() => trendOption(metrics, palette), [metrics, palette]);
   const typeChart = useMemo(() => typeOption(metrics, palette), [metrics, palette]);
-  // The workload chart draws people bottom-up, so its bar index maps to the reversed list.
   const peopleInChartOrder = useMemo(() => [...metrics.byPerson].reverse(), [metrics]);
   const workloadHeightClass = workloadHeight(metrics.byPerson.length);
 

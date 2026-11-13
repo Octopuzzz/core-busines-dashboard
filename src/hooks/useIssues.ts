@@ -9,7 +9,6 @@ interface Result {
   error: string | null;
 }
 
-/** Fetch issues for a query. Keeps the previous data visible while a new request is in flight. */
 export function useIssues(query: IssueQuery | null, reloadKey = 0) {
   const key = query ? JSON.stringify(query) : "";
   const reqKey = `${key}#${reloadKey}`;

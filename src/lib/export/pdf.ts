@@ -1,11 +1,3 @@
-/**
- * PDF export (A4 landscape).
- *
- * Page 1: title, KPI strip, workload + status charts.
- * Page 2: created-vs-resolved trend and a per-person summary table.
- * Then one section per person: summary line, "Left to do" table, "Done" table (with parents).
- * Every page gets a footer with the generation time and page number.
- */
 import type { jsPDF as JsPdf } from "jspdf";
 import type { Issue } from "@/lib/jira/types";
 import type { ExportInput, PersonReport } from "./common";
@@ -17,7 +9,6 @@ import { ACCENT, PALETTE_LIGHT, STATUS_COLORS } from "@/lib/theme";
 type Rgb = [number, number, number];
 type AutoTable = typeof import("jspdf-autotable").autoTable;
 
-/** "#3b6ef5" → [59, 110, 245] (jsPDF takes colours as RGB numbers). */
 function rgb(hex: string): Rgb {
   const value = parseInt(hex.slice(1), 16);
   return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
@@ -28,11 +19,9 @@ const MUTED: Rgb = [107, 114, 128];
 const ZEBRA: Rgb = [248, 249, 251];
 const TILE_BORDER: Rgb = [230, 232, 236];
 
-/** Page margin in points. */
 const MARGIN = 40;
 const percent = (rate: number) => `${Math.round(rate * 100)}%`;
 
-/** Chart render sizes (px) — the PDF scales them to fit, keeping the aspect ratio. */
 const CHART = {
   width: 900,
   statusHeight: 520,
@@ -41,7 +30,6 @@ const CHART = {
   workloadHeight: (people: number) => Math.max(360, people * 34 + 60),
 };
 
-/** Font, size and colour in one call, e.g. setText(doc, 11, INK, "bold"). */
 function setText(doc: JsPdf, size: number, color: Rgb, weight: "normal" | "bold" = "normal") {
   doc
     .setFont("helvetica", weight)
@@ -49,14 +37,9 @@ function setText(doc: JsPdf, size: number, color: Rgb, weight: "normal" | "bold"
     .setTextColor(...color);
 }
 
-/** Y position where the last autoTable ended. */
 function lastTableBottom(doc: JsPdf): number {
   return (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
 }
-
-/* -------------------------------------------------------------------------- */
-/*  Page 1 — header, KPIs, charts                                             */
-/* -------------------------------------------------------------------------- */
 
 function drawHeader(doc: JsPdf, input: ExportInput, pageWidth: number) {
   setText(doc, 22, INK, "bold");
@@ -134,10 +117,6 @@ async function drawFirstPageCharts(doc: JsPdf, input: ExportInput, pageWidth: nu
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Page 2 — trend + per-person summary                                       */
-/* -------------------------------------------------------------------------- */
-
 async function drawTrendAndTeamTable(
   doc: JsPdf,
   autoTable: AutoTable,
@@ -176,10 +155,6 @@ async function drawTrendAndTeamTable(
     margin: { left: MARGIN, right: MARGIN },
   });
 }
-
-/* -------------------------------------------------------------------------- */
-/*  Per-person sections                                                       */
-/* -------------------------------------------------------------------------- */
 
 const ISSUE_HEADER = ["Key", "Summary", "Parent", "Status", "Priority", "Due", "Updated"];
 const DUE_COLUMN = 5;
@@ -224,7 +199,6 @@ function drawIssueTable(
     headStyles: { fillColor: headerColor, textColor: 255 },
     alternateRowStyles: { fillColor: ZEBRA },
     margin: { left: MARGIN, right: MARGIN },
-    // Overdue due dates in bold red.
     didParseCell: (cell) => {
       const isOverdueDate =
         cell.section === "body" &&
@@ -255,13 +229,11 @@ function drawPersonSection(doc: JsPdf, autoTable: AutoTable, person: PersonRepor
   setText(doc, 10, MUTED);
   doc.text(personSummaryLine(person), MARGIN, 70);
 
-  // Left to do
   const accent = rgb(ACCENT);
   setText(doc, 11, accent, "bold");
   doc.text(`Left to do (${person.left.length})`, MARGIN, 96);
   if (person.left.length) drawIssueTable(doc, autoTable, 104, person.left, accent);
 
-  // Done — start a new page if there's no room for at least the heading and a few rows.
   let doneTop = person.left.length ? lastTableBottom(doc) + 26 : 118;
   if (doneTop > doc.internal.pageSize.getHeight() - 80) {
     doc.addPage();
@@ -286,12 +258,7 @@ function drawFooters(doc: JsPdf, pageWidth: number) {
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Entry point                                                               */
-/* -------------------------------------------------------------------------- */
-
 export async function exportPdf(input: ExportInput) {
-  // Loaded on demand so the PDF libraries don't weigh down the dashboard.
   const [{ jsPDF }, { autoTable }] = await Promise.all([
     import("jspdf"),
     import("jspdf-autotable"),

@@ -12,7 +12,6 @@ interface Props {
   open: boolean;
   onClose: () => void;
   title: React.ReactNode;
-  /** "dialog" = centred modal; "sheet" = right side panel (bottom sheet on phones). */
   kind?: "dialog" | "sheet";
   footer?: React.ReactNode;
   actions?: React.ReactNode;
@@ -20,10 +19,6 @@ interface Props {
   className?: string;
 }
 
-/**
- * Modal dialog or side sheet rendered in a portal.
- * Closes on Escape and backdrop click, and locks page scroll while open.
- */
 export function Overlay({
   open,
   onClose,
@@ -40,7 +35,6 @@ export function Overlay({
       if (event.key === "Escape") onClose();
     };
     document.addEventListener("keydown", closeOnEscape);
-    // Lock page scroll behind the dialog; restore whatever it was before.
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       { status: 400 },
     );
   }
-  if (!jiraConfigured()) return Response.json({ users: [] });
+  if (!(await jiraConfigured())) return Response.json({ users: [] });
   try {
     return Response.json({ users: await getUsers(ids as string[]) });
   } catch (e) {

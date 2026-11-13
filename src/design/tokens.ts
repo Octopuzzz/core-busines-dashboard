@@ -1,11 +1,3 @@
-/**
- * Design tokens — the single source of truth.
- * Consumed by: tailwind.config.ts (utility classes + CSS variables),
- * ECharts options, and the PDF / Excel / PPT exporters.
- *
- * ACCENT is a placeholder until the Kopnus brand colour is provided.
- */
-
 export const color = {
   light: {
     bg: "#f4f5f7",
@@ -43,7 +35,6 @@ export const color = {
 
 export type ColorToken = keyof typeof color.light;
 
-/** Categorical series for charts (accent first). */
 export const series = ["#3b6ef5", "#12a37f", "#d9822b", "#b5487e", "#7a5cf0", "#2a9bb8", "#8a919e"];
 
 export const radius = { sm: "6px", md: "10px", lg: "14px", xl: "20px", pill: "999px" };
@@ -55,7 +46,7 @@ export const shadow = {
 };
 
 export const motion = {
-  ease: [0.22, 1, 0.36, 1] as [number, number, number, number], // power3.out-ish, for Motion
+  ease: [0.22, 1, 0.36, 1] as [number, number, number, number],
   gsapEase: "power3.out",
   fast: 0.16,
   base: 0.24,
@@ -67,5 +58,4 @@ export const font = {
   mono: ["var(--font-geist-mono)", "ui-monospace", "monospace"],
 };
 
-/** Map a token name to its CSS variable, for Tailwind. */
 export const cssVar = (token: ColorToken) => `var(--c-${token})`;

@@ -1,13 +1,3 @@
-/**
- * PowerPoint export.
- *
- * Charts are NATIVE PowerPoint charts — they stay editable in PowerPoint (hover values,
- * edit data, restyle) instead of being flat screenshots.
- *
- * Slides:
- *   01 Title · 02 At a glance (KPIs) · 03 Workload per person · 04 Status & types
- *   05 Created vs resolved · 06+ one slide per person (done vs left + what's next)
- */
 import type PptxGenJS from "pptxgenjs";
 import type { ExportInput, PersonReport } from "./common";
 import { byPerson, fileName, fmtDays, issueRow } from "./common";
@@ -16,10 +6,8 @@ import { ACCENT, SERIES, STATUS_COLORS } from "@/lib/theme";
 type Presentation = PptxGenJS;
 type Slide = PptxGenJS.Slide;
 
-/** Position and size in inches (the slide is 13.33 × 7.5). */
 const box = (x: number, y: number, w: number, h: number) => ({ x, y, w, h });
 
-/** pptxgenjs wants colours as "RRGGBB" without the hash. */
 const hex = (color: string) => color.replace("#", "").toUpperCase();
 
 const FONT = "Arial";
@@ -30,16 +18,10 @@ const TILE_FILL = "F7F8FA";
 const TILE_BORDER = "E6E8EC";
 const GRID_LINE = { color: "ECEEF2", size: 1 };
 
-/** Rows of open work shown on each person's slide (the slide fits about this many). */
 const MAX_ROWS_PER_PERSON = 9;
 
 const percent = (rate: number) => `${Math.round(rate * 100)}%`;
 
-/* -------------------------------------------------------------------------- */
-/*  Shared slide pieces                                                       */
-/* -------------------------------------------------------------------------- */
-
-/** Accent bar on the left, slide number, title, and the scope line at the bottom. */
 function addSlideFrame(
   pptx: Presentation,
   slide: Slide,
@@ -91,7 +73,6 @@ interface Tile {
   color: string;
 }
 
-/** A rounded number tile: small caps label above a big value. */
 function addTile(
   pptx: Presentation,
   slide: Slide,
@@ -121,17 +102,12 @@ function addTile(
   });
 }
 
-/** Chart options every native chart shares. */
 const CHART_TEXT = {
   legendFontFace: FONT,
   catAxisLabelFontFace: FONT,
   valAxisLabelFontFace: FONT,
   valGridLine: GRID_LINE,
 };
-
-/* -------------------------------------------------------------------------- */
-/*  Slides                                                                    */
-/* -------------------------------------------------------------------------- */
 
 function addTitleSlide(pptx: Presentation, input: ExportInput) {
   const slide = pptx.addSlide();
@@ -189,7 +165,6 @@ function addKpiSlide(pptx: Presentation, input: ExportInput) {
     { label: "Avg. cycle time", value: fmtDays(metrics.avgCycleDays), color: INK },
   ];
 
-  // 3 × 2 grid
   tiles.forEach((tile, index) => {
     const column = index % 3;
     const row = Math.floor(index / 3);
@@ -205,7 +180,6 @@ function addWorkloadSlide(pptx: Presentation, input: ExportInput) {
   const slide = pptx.addSlide();
   addSlideFrame(pptx, slide, input, "Workload per person", 3);
 
-  // Bar charts draw the first category at the bottom — reverse so the busiest person is on top.
   const people = [...input.metrics.byPerson].reverse();
   const names = people.map((person) => person.name);
 
@@ -306,7 +280,6 @@ function addTrendSlide(pptx: Presentation, input: ExportInput) {
   );
 }
 
-/** One person: Done / Left / Overdue / Completion tiles, then the next open items with parents. */
 function addPersonSlide(
   pptx: Presentation,
   input: ExportInput,
@@ -394,14 +367,10 @@ function addPersonSlide(
   });
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Entry point                                                               */
-/* -------------------------------------------------------------------------- */
-
 export async function exportPpt(input: ExportInput) {
   const PptxGenJS = (await import("pptxgenjs")).default;
   const pptx = new PptxGenJS();
-  pptx.layout = "LAYOUT_WIDE"; // 13.33 × 7.5 in
+  pptx.layout = "LAYOUT_WIDE";
   pptx.title = input.title;
 
   addTitleSlide(pptx, input);

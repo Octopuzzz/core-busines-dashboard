@@ -1,6 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { Code2, FolderKanban, RotateCw, Search, Users, X } from "lucide-react";
 import type { JiraProject } from "@/lib/jira/types";
 import type { RangeSetting } from "@/lib/groups/store";
@@ -8,7 +8,6 @@ import { cn } from "@/lib/ui/cn";
 import { Avatar, Button, Input } from "../atoms";
 import { DateRange, FilterChip, MultiSelect } from "../molecules";
 
-/** A removable filter tag shown under the bar (e.g. set by clicking a chart). */
 export interface Chip {
   key: string;
   label: string;
@@ -26,21 +25,14 @@ interface Props {
   onProjects: (projectKeys: string[]) => void;
   range: RangeSetting;
   onRange: (range: RangeSetting) => void;
-  /** Saved-views control (rendered next to the action buttons). */
   views: React.ReactNode;
-  showJql: boolean;
-  onToggleJql: () => void;
-  jqlDraft: string;
-  onJqlDraft: (value: string) => void;
-  /** True when an advanced JQL filter is applied. */
   jqlActive: boolean;
-  onApplyJql: () => void;
+  onOpenJql: () => void;
   loading: boolean;
   onReload: () => void;
   chips: Chip[];
 }
 
-/** Search box, people/project/date filters, saved views, advanced JQL and active filter chips. */
 export function FilterBar(props: Props) {
   const peopleOptions = props.people.map((person) => ({
     value: person.accountId,
@@ -64,11 +56,6 @@ export function FilterBar(props: Props) {
       <X className="size-4" />
     </button>
   );
-
-  const submitJql = (event: React.FormEvent) => {
-    event.preventDefault();
-    props.onApplyJql();
-  };
 
   return (
     <div className="mb-3">
@@ -105,13 +92,12 @@ export function FilterBar(props: Props) {
         <div className="flex gap-2 sm:col-span-2 xl:col-span-1">
           {props.views}
           <Button
-            variant={props.showJql || props.jqlActive ? "primary" : "secondary"}
+            variant={props.jqlActive ? "primary" : "secondary"}
             iconOnly
-            aria-label="Advanced JQL"
-            aria-pressed={props.showJql}
-            title="Advanced JQL"
+            aria-label="JQL editor"
+            title="JQL editor"
             icon={<Code2 className="size-4" />}
-            onClick={props.onToggleJql}
+            onClick={props.onOpenJql}
           />
           <Button
             variant="secondary"
@@ -123,34 +109,6 @@ export function FilterBar(props: Props) {
           />
         </div>
       </div>
-
-      <AnimatePresence initial={false}>
-        {props.showJql && (
-          <motion.form
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-            onSubmit={submitJql}
-          >
-            <div className="flex gap-2 pt-2">
-              <Input
-                mono
-                leading={<Code2 className="size-4" />}
-                placeholder="sprint in openSprints() AND labels = backend"
-                value={props.jqlDraft}
-                onChange={(event) => props.onJqlDraft(event.target.value)}
-              />
-              <Button type="submit" variant="primary">
-                Apply
-              </Button>
-            </div>
-            <p className="mt-1.5 text-xs text-muted">
-              Added on top of the team, project and date filters.
-            </p>
-          </motion.form>
-        )}
-      </AnimatePresence>
 
       <div className="mt-2 flex min-h-0 flex-wrap gap-1.5">
         <AnimatePresence>

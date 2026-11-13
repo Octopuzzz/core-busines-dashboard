@@ -1,11 +1,3 @@
-/**
- * Excel export.
- *
- * Sheets:
- *   Overview      — team totals + one row per person (each name links to their sheet)
- *   <one per person> — summary (done / left / overdue), parent issues, "Left to do", "Done"
- *   All issues    — every issue on one filterable sheet
- */
 import type { Cell, Row, Workbook, Worksheet } from "exceljs";
 import type { Issue } from "@/lib/jira/types";
 import { color } from "@/design/tokens";
@@ -17,11 +9,9 @@ const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.s
 const OVERVIEW_SHEET = "Overview";
 const ALL_ISSUES_SHEET = "All issues";
 
-/** Excel colours are "AARRGGBB". */
 const argb = (hex: string) => "FF" + hex.replace("#", "").toUpperCase();
 const percent = (rate: number) => `${Math.round(rate * 100)}%`;
 
-/** Columns used by every issue table (per-person sheets and "All issues"). */
 const ISSUE_COLUMNS: { header: string; key: keyof IssueRow; width: number }[] = [
   { header: "Key", key: "key", width: 13 },
   { header: "Summary", key: "summary", width: 56 },
@@ -37,11 +27,6 @@ const ISSUE_COLUMNS: { header: string; key: keyof IssueRow; width: number }[] = 
 ];
 const columnNumber = (key: keyof IssueRow) => ISSUE_COLUMNS.findIndex((c) => c.key === key) + 1;
 
-/* -------------------------------------------------------------------------- */
-/*  Cell styling helpers                                                      */
-/* -------------------------------------------------------------------------- */
-
-/** White bold text on a coloured band. */
 function styleHeaderRow(row: Row, fill: string = COLORS.accent) {
   row.font = { bold: true, color: { argb: "FFFFFFFF" } };
   row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: argb(fill) } };
@@ -49,7 +34,6 @@ function styleHeaderRow(row: Row, fill: string = COLORS.accent) {
   row.height = 22;
 }
 
-/** Turns a cell into a blue underlined hyperlink (skipped for sample data, which has no URL). */
 function setLink(cell: Cell, text: string, url: string) {
   if (!text || !url || url === "#") return;
   cell.value = { text, hyperlink: url };
@@ -64,10 +48,6 @@ function addMutedLine(sheet: Worksheet, text: string) {
   sheet.addRow([text]).font = { color: { argb: argb(COLORS.muted) } };
 }
 
-/**
- * Excel sheet names must be ≤ 31 characters, avoid []:*?/\' and be unique (case-insensitive).
- * Returns one safe name per person, never clashing with the reserved sheet names.
- */
 function safeSheetNames(names: string[], reserved: string[]): string[] {
   const used = new Set(reserved.map((name) => name.toLowerCase()));
 
@@ -86,7 +66,6 @@ function safeSheetNames(names: string[], reserved: string[]): string[] {
   });
 }
 
-/** A heading like "Left to do (12)" followed by an issue table (or a dash when empty). */
 function addIssueTable(sheet: Worksheet, title: string, issues: Issue[], tone: string) {
   sheet.addRow([]);
   sheet.addRow([`${title} (${issues.length})`]).font = {
@@ -110,10 +89,6 @@ function addIssueTable(sheet: Worksheet, title: string, issues: Issue[], tone: s
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Sheets                                                                    */
-/* -------------------------------------------------------------------------- */
-
 function addOverviewSheet(
   workbook: Workbook,
   input: ExportInput,
@@ -131,7 +106,6 @@ function addOverviewSheet(
     setBoldColor(sheet.addRow(["SAMPLE DATA — not from Jira"]).getCell(1), COLORS.overdue);
   }
 
-  // Team totals
   sheet.addRow([]);
   styleHeaderRow(sheet.addRow(["Team total", "Issues"]));
   const totals: [string, string | number][] = [
@@ -144,7 +118,6 @@ function addOverviewSheet(
   ];
   totals.forEach((total) => sheet.addRow(total));
 
-  // One row per person
   sheet.addRow([]);
   styleHeaderRow(
     sheet.addRow([
@@ -170,7 +143,6 @@ function addOverviewSheet(
       person.rate,
     ]);
     row.getCell(8).numFmt = "0%";
-    // Clicking a name jumps to that person's sheet.
     setLink(row.getCell(1), person.name, `#'${sheetNames[index]}'!A1`);
     if (person.overdue) setBoldColor(row.getCell(7), COLORS.overdue);
   });
@@ -184,7 +156,6 @@ interface ParentSummary {
   left: number;
 }
 
-/** The parent issues a person's work rolls up to, with how much is done / left under each. */
 function parentsOf(issues: Issue[]): [string, ParentSummary][] {
   const parents = new Map<string, ParentSummary>();
   for (const issue of issues) {
@@ -200,7 +171,6 @@ function parentsOf(issues: Issue[]): [string, ParentSummary][] {
     else entry.left++;
     parents.set(issue.parent.key, entry);
   }
-  // Most remaining work first.
   return [...parents.entries()].sort(([, a], [, b]) => b.left - a.left || b.done - a.done);
 }
 
@@ -218,7 +188,6 @@ function addPersonSheet(
   addMutedLine(sheet, `${teamName} · ${input.period}`);
   sheet.addRow([]);
 
-  // Summary: what's done, what's left.
   styleHeaderRow(sheet.addRow(["Summary", "Count"]));
   const summary: { label: string; value: number | string; tone?: string }[] = [
     { label: "Total issues", value: person.issues.length },
@@ -234,7 +203,6 @@ function addPersonSheet(
     if (line.tone) setBoldColor(row.getCell(2), line.tone);
   }
 
-  // Parent issues
   const parents = parentsOf(person.issues);
   if (parents.length) {
     sheet.addRow([]);
@@ -270,12 +238,7 @@ function addAllIssuesSheet(workbook: Workbook, issues: Issue[]) {
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Entry point                                                               */
-/* -------------------------------------------------------------------------- */
-
 export async function exportExcel(input: ExportInput) {
-  // Loaded on demand so ExcelJS doesn't weigh down the dashboard.
   const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "Kopnus Team Pulse";

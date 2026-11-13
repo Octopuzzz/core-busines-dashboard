@@ -14,7 +14,6 @@ export const teams = pgTable("teams", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   color: text("color").notNull(),
-  /** Last-used query (search, people, projects, range, JQL). */
   settings: jsonb("settings").$type<TeamSettings>(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -27,13 +26,12 @@ export const teamMembers = pgTable(
       .notNull()
       .references(() => teams.id, { onDelete: "cascade" }),
     position: integer("position").notNull(),
-    /** Name as configured; used to look up the Jira account when accountId is empty. */
     name: text("name").notNull(),
     accountId: text("account_id"),
     displayName: text("display_name"),
     email: text("email"),
     avatarUrl: text("avatar_url"),
-    source: text("source"), // "jira" | "sample"
+    source: text("source"),
   },
   (t) => [
     primaryKey({ columns: [t.teamId, t.name] }),
@@ -55,10 +53,20 @@ export const savedViews = pgTable(
   (t) => [index("saved_views_team_idx").on(t.teamId)],
 );
 
-/**
- * Idempotent DDL matching the schema above — run once per server process so the app works
- * against an empty database without a separate migration step. (`npm run db:push` does the same via drizzle-kit.)
- */
+export const savedQueries = pgTable("saved_queries", {
+  id: uuid("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  settings: jsonb("settings").$type<TeamSettings>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const appConfig = pgTable("app_config", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const ENSURE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS teams (
   id text PRIMARY KEY,
@@ -88,4 +96,20 @@ CREATE TABLE IF NOT EXISTS saved_views (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS saved_views_team_idx ON saved_views(team_id);
+CREATE TABLE IF NOT EXISTS saved_queries (
+  id uuid PRIMARY KEY,
+  name text NOT NULL UNIQUE,
+  settings jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+WITH moved AS (DELETE FROM saved_views RETURNING id, name, settings, created_at)
+INSERT INTO saved_queries (id, name, settings, created_at, updated_at)
+SELECT id, name, settings, created_at, created_at FROM moved
+ON CONFLICT DO NOTHING;
+CREATE TABLE IF NOT EXISTS app_config (
+  key text PRIMARY KEY,
+  value text NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 `;

@@ -9,7 +9,6 @@ const tones: Record<Tone, string> = {
   overdue: "bg-overdue/10 text-overdue border-overdue/25",
 };
 
-/** Small pill label in one of the token tones. */
 export function Badge({
   tone = "neutral",
   className,

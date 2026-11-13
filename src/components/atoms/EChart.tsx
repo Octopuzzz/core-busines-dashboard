@@ -6,16 +6,11 @@ import { cn } from "@/lib/ui/cn";
 
 interface Props {
   option: EChartsOption;
-  /** Tailwind height class, e.g. "h-64". */
   className: string;
   ariaLabel: string;
   onClick?: (p: { name: string; seriesName?: string; dataIndex: number }) => void;
 }
 
-/**
- * Thin React wrapper around an ECharts instance.
- * Lazy-loads ECharts, resizes with its container, and forwards clicks.
- */
 export function EChart({ option, className, ariaLabel, onClick }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const chart = useRef<ECharts | null>(null);

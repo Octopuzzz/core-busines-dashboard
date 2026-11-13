@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
   ) {
     return Response.json({ error: "Expected { names: string[] } (max 100)." }, { status: 400 });
   }
-  if (!jiraConfigured()) return Response.json({ source: "sample", results: sampleResolve(names) });
+  if (!(await jiraConfigured()))
+    return Response.json({ source: "sample", results: sampleResolve(names) });
   try {
     return Response.json({ source: "jira", results: await resolveNames(names) });
   } catch (e) {

@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/ui/cn";
 
-// Background tints drawn from the token palette (accent, done, warn, …) — no new hues.
 const tints = [
   "bg-accent/15 text-accent",
   "bg-done/15 text-done",
@@ -11,7 +10,6 @@ const tints = [
   "bg-overdue/12 text-overdue",
   "bg-ink/10 text-ink-2",
 ];
-/** Small stable string hash, so the same name always gets the same tint. */
 const hashName = (text: string) =>
   [...text].reduce((hash, char) => (hash * 31 + char.charCodeAt(0)) >>> 0, 7);
 
@@ -22,7 +20,6 @@ const sizes = {
   lg: "size-10 text-sm",
 };
 
-/** Jira's generated initials images (direct or as a Gravatar fallback) clash with ours. */
 function usable(src?: string) {
   if (!src) return undefined;
   if (/\/initials\//i.test(src.split("?")[0])) return undefined;
@@ -31,7 +28,6 @@ function usable(src?: string) {
   return src;
 }
 
-/** Round avatar: the person's photo when available, otherwise tinted initials. */
 export function Avatar({
   name,
   src,
@@ -46,6 +42,12 @@ export function Avatar({
   const url = usable(src);
   const [failed, setFailed] = useState<string | null>(null);
   const showImg = url && failed !== url;
+  const image = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    const img = image.current;
+    if (url && img?.complete && img.naturalWidth === 0) setFailed(url);
+  }, [url]);
   const initials = name
     .split(/\s+/)
     .filter(Boolean)
@@ -66,6 +68,7 @@ export function Avatar({
       {showImg ? (
         // eslint-disable-next-line @next/next/no-img-element -- external Jira/Gravatar avatars, already sized
         <img
+          ref={image}
           src={url}
           alt=""
           referrerPolicy="no-referrer"

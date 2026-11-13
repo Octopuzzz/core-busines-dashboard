@@ -1,36 +1,17 @@
-/**
- * Team store (browser side).
- *
- * Teams — their members, last-used filters and saved views — live in Postgres (via /api/teams)
- * when the server has DATABASE_URL. The browser keeps a copy in localStorage as an offline cache,
- * and uses it as the only store when no database is configured.
- *
- * Saves are optimistic: the UI updates immediately, then the change is written to the database
- * in the background (debounced per team). React reads this store through useGroups().
- */
 import type { JiraPerson } from "@/lib/jira/types";
 import { DEFAULT_TEAMS } from "@/config/teams";
 import { series } from "@/design/tokens";
 
-/* -------------------------------------------------------------------------- */
-/*  Types                                                                     */
-/* -------------------------------------------------------------------------- */
-
-/** A team member: the configured name, plus the Jira account once it is found. */
 export interface Member {
   name: string;
   person?: JiraPerson;
-  /** Where `person` came from — a "sample" match is redone once Jira is connected. */
   source?: "jira" | "sample";
 }
 
-/** Date range: a rolling preset (recomputed from today) or fixed dates. */
 export type RangeSetting = { preset: 14 | 30 | 90 | "year" | "all" } | { from: string; to: string };
 
-/** Everything that defines "the query" for a team. */
 export interface TeamSettings {
   search: string;
-  /** Account IDs to show; empty = everyone in the team. */
   people: string[];
   projectKeys: string[];
   range: RangeSetting;
@@ -49,9 +30,7 @@ export interface Group {
   name: string;
   color: string;
   members: Member[];
-  /** Last-used filters for this team — restored when the team is opened. */
   settings?: TeamSettings;
-  /** Named queries saved for this team. */
   views?: SavedView[];
   createdAt: string;
   updatedAt: string;
@@ -59,6 +38,7 @@ export interface Group {
 
 export interface GroupRepository {
   list(): Group[];
+  init?(initialTeams?: Group[] | null): void;
   save(group: Group): void;
   remove(id: string): void;
   subscribe(listener: () => void): () => void;
@@ -68,9 +48,7 @@ export type StorageMode = "loading" | "database" | "browser" | "error";
 
 export interface StorageStatus {
   mode: StorageMode;
-  /** Set when the database is configured but failing. */
   error?: string;
-  /** True while changes are waiting to be written to the database. */
   pending?: boolean;
 }
 
@@ -82,20 +60,13 @@ export const DEFAULT_SETTINGS: TeamSettings = {
   jql: "",
 };
 
-/* -------------------------------------------------------------------------- */
-/*  localStorage                                                              */
-/* -------------------------------------------------------------------------- */
-
 const CACHE_KEY = "kopnus.jira.teams.v3";
-/** Older cache key from before settings/views existed — read once so linked avatars carry over. */
 const LEGACY_CACHE_KEY = "kopnus.jira.teams.v2";
-/** Set after this browser's teams were uploaded to the database the first time. */
 const MIGRATED_KEY = "kopnus.jira.teams.migratedToDb";
 
 const SAVE_DEBOUNCE_MS = 400;
 const NO_GROUPS: Group[] = [];
 
-/** localStorage can throw (private mode, blocked storage) — never let that break the app. */
 const storage = {
   get(key: string): string | null {
     try {
@@ -107,9 +78,7 @@ const storage = {
   set(key: string, value: string) {
     try {
       window.localStorage.setItem(key, value);
-    } catch {
-      /* keep working in memory */
-    }
+    } catch {}
   },
 };
 
@@ -123,9 +92,8 @@ function readCachedGroups(): Group[] {
   }
 }
 
-/** The teams defined in src/config/teams.ts (e.g. Core Engineering), as fresh groups. */
 function configuredTeams(): Group[] {
-  const now = new Date().toISOString();
+  const epoch = "1970-01-01T00:00:00.000Z";
   return DEFAULT_TEAMS.map((team, index) => ({
     id: team.id,
     name: team.name,
@@ -141,77 +109,50 @@ function configuredTeams(): Group[] {
     ),
     settings: DEFAULT_SETTINGS,
     views: [],
-    createdAt: now,
-    updatedAt: now,
+    createdAt: epoch,
+    updatedAt: epoch,
   }));
 }
 
-/* -------------------------------------------------------------------------- */
-/*  First-connection merge                                                    */
-/* -------------------------------------------------------------------------- */
-
-const withoutTimestamps = (group: Group) => ({
-  ...group,
-  createdAt: undefined,
-  updatedAt: undefined,
-});
-const sameContent = (a: Group, b: Group) =>
-  JSON.stringify(withoutTimestamps(a)) === JSON.stringify(withoutTimestamps(b));
-
-/**
- * Combines the browser copy with what the database returned.
- *
- * Normally the database wins. The first time this browser connects, teams that exist only in
- * the browser — or were changed here more recently — are kept and returned in `toUpload`.
- */
-function mergeWithDatabase(local: Group[], fromDatabase: Group[], firstConnection: boolean) {
-  const remaining = new Map(fromDatabase.map((group) => [group.id, group]));
-  const merged: Group[] = [];
+function mergeWithDatabase(local: Group[], fromDatabase: Group[]) {
+  const dbMap = new Map(fromDatabase.map((group) => [group.id, group]));
   const toUpload: string[] = [];
 
   for (const localGroup of local) {
-    const dbGroup = remaining.get(localGroup.id);
-    remaining.delete(localGroup.id);
-
-    const localIsNewer =
-      !!dbGroup && localGroup.updatedAt > dbGroup.updatedAt && !sameContent(localGroup, dbGroup);
-    const keepLocal = firstConnection && (!dbGroup || localIsNewer);
-
-    if (keepLocal) {
-      merged.push(localGroup);
+    if (!dbMap.has(localGroup.id) && !DEFAULT_TEAMS.some((t) => t.id === localGroup.id)) {
+      dbMap.set(localGroup.id, localGroup);
       toUpload.push(localGroup.id);
-    } else if (dbGroup) {
-      merged.push(dbGroup);
     }
   }
 
-  merged.push(...remaining.values()); // teams created from another browser
-  return { merged, toUpload };
+  return { merged: Array.from(dbMap.values()), toUpload };
 }
-
-/* -------------------------------------------------------------------------- */
-/*  Repository                                                                */
-/* -------------------------------------------------------------------------- */
 
 class SyncedGroupRepository implements GroupRepository {
   private groups: Group[] | null = null;
   private listeners = new Set<() => void>();
   private connectStarted = false;
+  private initialized = false;
 
-  /** Status is replaced (never mutated) so React's useSyncExternalStore sees each change. */
   private status: StorageStatus = { mode: "loading" };
 
-  /** Pending debounced saves, per team id. */
   private saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
   private savesInFlight = 0;
 
-  /* ---------- reading ---------- */
+  init(initialTeams?: Group[] | null) {
+    if (this.initialized || typeof window === "undefined") return;
+    this.initialized = true;
+    if (!initialTeams?.length) return;
+    this.groups = initialTeams;
+    this.status = { mode: "database" };
+    this.connectStarted = true;
+    this.writeCache();
+  }
 
   list(): Group[] {
     if (typeof window === "undefined") return NO_GROUPS;
 
     if (!this.groups) {
-      // Start from the browser copy, adding any configured team it doesn't have yet.
       const cached = readCachedGroups();
       const missing = configuredTeams().filter((team) => !cached.some((g) => g.id === team.id));
       this.groups = [...missing, ...cached];
@@ -231,7 +172,6 @@ class SyncedGroupRepository implements GroupRepository {
   subscribe(listener: () => void) {
     this.listeners.add(listener);
 
-    // Another tab changed the cache — reload it here too.
     const onStorageEvent = (event: StorageEvent) => {
       if (event.key !== CACHE_KEY) return;
       this.groups = null;
@@ -245,8 +185,6 @@ class SyncedGroupRepository implements GroupRepository {
     };
   }
 
-  /* ---------- writing ---------- */
-
   save(group: Group) {
     const updated = { ...group, updatedAt: new Date().toISOString() };
     const current = this.list();
@@ -258,7 +196,6 @@ class SyncedGroupRepository implements GroupRepository {
     this.writeCache();
     this.notify();
 
-    // In "error" mode we still try, so the next change can recover once the database is back.
     if (this.status.mode === "database" || this.status.mode === "error") {
       this.scheduleSave(updated.id);
     }
@@ -276,8 +213,6 @@ class SyncedGroupRepository implements GroupRepository {
     }
   }
 
-  /* ---------- internals ---------- */
-
   private writeCache() {
     storage.set(CACHE_KEY, JSON.stringify(this.groups));
   }
@@ -291,7 +226,6 @@ class SyncedGroupRepository implements GroupRepository {
     this.notify();
   }
 
-  /** Loads teams from the database once per page load and decides the storage mode. */
   private async connectToDatabase() {
     let response: Response;
     let body: { configured?: boolean; teams?: Group[]; error?: string };
@@ -316,8 +250,7 @@ class SyncedGroupRepository implements GroupRepository {
       return;
     }
 
-    const firstConnection = storage.get(MIGRATED_KEY) !== "1";
-    const { merged, toUpload } = mergeWithDatabase(this.list(), body.teams, firstConnection);
+    const { merged, toUpload } = mergeWithDatabase(this.list(), body.teams);
 
     this.groups = merged;
     this.writeCache();
@@ -367,10 +300,6 @@ class SyncedGroupRepository implements GroupRepository {
 
 export const groupRepository = new SyncedGroupRepository();
 
-/* -------------------------------------------------------------------------- */
-/*  Helpers                                                                   */
-/* -------------------------------------------------------------------------- */
-
 export function newGroup(name: string): Group {
   const now = new Date().toISOString();
   const id =
@@ -387,6 +316,5 @@ export function newGroup(name: string): Group {
   };
 }
 
-/** Members that are linked to a Jira account (or a sample stand-in). */
 export const resolvedPeople = (group: Group): JiraPerson[] =>
   group.members.flatMap((member) => (member.person ? [member.person] : []));

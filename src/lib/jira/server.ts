@@ -1,14 +1,10 @@
-/**
- * Jira Cloud client — server only (the API token never reaches the browser).
- *
- * Reads JIRA_BASE_URL, JIRA_EMAIL and JIRA_API_TOKEN (and optionally JIRA_CLOUD_ID for scoped
- * tokens) from the environment. Used by the /api/jira/* route handlers.
- */
 import "server-only";
+import { dbConfigured, ensureSchema, getDb } from "@/lib/db";
+import { appConfig } from "@/lib/db/schema";
 import type { Issue, IssueQuery, JiraPerson, JiraProject, StatusCategory } from "./types";
 
 const PAGE_SIZE = 100;
-const MAX_PAGES = 20; // 20 × 100 = up to 2,000 issues per request
+const MAX_PAGES = 20;
 const ISSUE_FIELDS = [
   "summary",
   "status",
@@ -24,23 +20,61 @@ const ISSUE_FIELDS = [
   "parent",
 ];
 
-/* -------------------------------------------------------------------------- */
-/*  HTTP                                                                      */
-/* -------------------------------------------------------------------------- */
-
-export function jiraConfigured(): boolean {
-  return Boolean(process.env.JIRA_BASE_URL && process.env.JIRA_EMAIL && process.env.JIRA_API_TOKEN);
+export interface JiraConfig {
+  baseUrl: string;
+  email: string;
+  apiToken: string;
+  cloudId?: string;
 }
 
-/** Public site URL, e.g. https://corekopnus.atlassian.net — used for "open in Jira" links. */
-function siteUrl() {
-  return (process.env.JIRA_BASE_URL ?? "").replace(/\/+$/, "");
+let cachedConfig: JiraConfig | null = null;
+let lastCheck = 0;
+const CONFIG_TTL_MS = 15_000;
+
+const clean = (value?: string | null) => value?.trim().replace(/^["']|["']$/g, "") || "";
+
+async function readDbConfig(): Promise<Record<string, string>> {
+  if (!dbConfigured()) return {};
+  try {
+    await ensureSchema();
+    const rows = await getDb().select().from(appConfig);
+    return Object.fromEntries(rows.map((row) => [row.key, clean(row.value)]));
+  } catch (e) {
+    console.error("[jira] couldn't load config from database:", (e as Error).message);
+    return {};
+  }
 }
 
-/** API root. Scoped API tokens must go through the Atlassian gateway (needs JIRA_CLOUD_ID). */
-function apiRoot() {
-  const cloudId = process.env.JIRA_CLOUD_ID?.trim();
-  return cloudId ? `https://api.atlassian.com/ex/jira/${cloudId}` : siteUrl();
+export async function getJiraConfig(): Promise<JiraConfig | null> {
+  const now = Date.now();
+  if (now - lastCheck < CONFIG_TTL_MS) return cachedConfig;
+
+  const db = await readDbConfig();
+  const pick = (key: string) => db[key] || clean(process.env[key]);
+
+  const baseUrl = pick("JIRA_BASE_URL");
+  const email = pick("JIRA_EMAIL");
+  const apiToken = pick("JIRA_API_TOKEN");
+  const cloudId = pick("JIRA_CLOUD_ID") || undefined;
+
+  cachedConfig = baseUrl && email && apiToken ? { baseUrl, email, apiToken, cloudId } : null;
+  lastCheck = now;
+  return cachedConfig;
+}
+
+export async function jiraConfigured(): Promise<boolean> {
+  const config = await getJiraConfig();
+  return Boolean(config?.baseUrl && config?.email && config?.apiToken);
+}
+
+function siteUrl(config?: JiraConfig | null) {
+  const url = config?.baseUrl ?? cachedConfig?.baseUrl ?? "";
+  return url.replace(/\/+$/, "");
+}
+
+function apiRoot(config?: JiraConfig | null) {
+  const cloudId = config ? config.cloudId : cachedConfig?.cloudId;
+  return cloudId ? `https://api.atlassian.com/ex/jira/${cloudId}` : siteUrl(config);
 }
 
 const browseUrl = (issueKey: string) => `${siteUrl()}/browse/${issueKey}`;
@@ -54,10 +88,12 @@ export class JiraError extends Error {
   }
 }
 
-/** Authenticated request to the Jira REST API. Throws JiraError on non-2xx responses. */
 async function jiraFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const credentials = `${process.env.JIRA_EMAIL}:${process.env.JIRA_API_TOKEN}`;
-  const response = await fetch(`${apiRoot()}${path}`, {
+  const config = await getJiraConfig();
+  if (!config)
+    throw new JiraError(500, "Jira credentials are not configured in environment or database.");
+  const credentials = `${config.email}:${config.apiToken}`;
+  const response = await fetch(`${apiRoot(config)}${path}`, {
     ...init,
     headers: {
       Authorization: `Basic ${Buffer.from(credentials).toString("base64")}`,
@@ -75,38 +111,27 @@ async function jiraFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Auth check                                                                */
-/* -------------------------------------------------------------------------- */
-
 const AUTH_CHECK_TTL_MS = 60_000;
 let authVerifiedUntil = 0;
 
-/** The account behind the configured token. Throws JiraError(401) for bad credentials. */
 export async function whoAmI(): Promise<JiraPerson> {
   return toPerson(await jiraFetch<RawUser>("/rest/api/3/myself"));
 }
 
-/**
- * Jira's user search quietly returns [] for bad credentials instead of a 401, which would look
- * like "nobody found". Call this first so a bad token fails loudly. Checked at most once a minute.
- */
 export async function assertAuth() {
   if (Date.now() < authVerifiedUntil) return;
   await whoAmI();
   authVerifiedUntil = Date.now() + AUTH_CHECK_TTL_MS;
 }
 
-/* -------------------------------------------------------------------------- */
-/*  JQL                                                                       */
-/* -------------------------------------------------------------------------- */
-
-// Values are validated before going into JQL so the query can't be broken or injected.
 const SAFE_ACCOUNT_ID = /^[A-Za-z0-9:_-]+$/;
 const SAFE_PROJECT_KEY = /^[A-Z][A-Z0-9_]+$/;
 const SAFE_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Builds the JQL for a team query: assignees AND projects AND date range AND extra JQL. */
+export function withoutOrderBy(jql: string): string {
+  return jql.replace(/\s*\bORDER\s+BY\s+[^"']*$/i, "").trim();
+}
+
 export function buildJql(query: IssueQuery): string {
   const accountIds = query.accountIds.filter((id) => SAFE_ACCOUNT_ID.test(id));
   const projectKeys = (query.projectKeys ?? []).filter((key) => SAFE_PROJECT_KEY.test(key));
@@ -115,14 +140,11 @@ export function buildJql(query: IssueQuery): string {
   if (projectKeys.length) clauses.push(`project in (${projectKeys.join(", ")})`);
   if (query.from && SAFE_DATE.test(query.from)) clauses.push(`updated >= "${query.from}"`);
   if (query.to && SAFE_DATE.test(query.to)) clauses.push(`updated <= "${query.to} 23:59"`);
-  if (query.jql?.trim()) clauses.push(`(${query.jql.trim()})`);
+  const userJql = withoutOrderBy(query.jql ?? "");
+  if (userJql) clauses.push(`(${userJql})`);
 
   return `${clauses.join(" AND ")} ORDER BY updated DESC`;
 }
-
-/* -------------------------------------------------------------------------- */
-/*  Mapping Jira's JSON to our types                                          */
-/* -------------------------------------------------------------------------- */
 
 interface RawUser {
   accountId: string;
@@ -151,12 +173,6 @@ interface RawIssue {
   };
 }
 
-/**
- * Keeps real photos and drops Jira's generated "initials" images (they clash with our avatars).
- * - Direct ".../initials/XX-n.png" → no avatar.
- * - Gravatar with an initials fallback → ask Gravatar to 404 instead, so a real Gravatar photo
- *   still shows and people without one fall back to our initials (the Avatar handles onError).
- */
 export function cleanAvatar(url?: string): string | undefined {
   if (!url) return undefined;
   try {
@@ -188,16 +204,12 @@ function toPerson(user: RawUser): JiraPerson {
 const ACRONYMS = new Set(["QA", "UAT", "PO", "SA", "TM", "UI", "UX", "API", "BA", "PM", "SIT"]);
 const LOWERCASE_WORDS = new Set(["for", "and", "of", "in", "to", "or", "on", "the", "&", "/"]);
 
-/**
- * Tidies ALL-CAPS workflow names: "READY FOR UAT / PO REVIEW" → "Ready for UAT / PO Review".
- * Names that already use mixed case are left alone.
- */
 export function prettyStatus(name: string): string {
   if (name !== name.toUpperCase()) return name;
 
   return name
     .toLowerCase()
-    .split(/(\s+)/) // keep the whitespace so spacing is preserved
+    .split(/(\s+)/)
     .map((word, index) => {
       if (/^\s+$/.test(word)) return word;
       if (ACRONYMS.has(word.toUpperCase())) return word.toUpperCase();
@@ -239,11 +251,6 @@ function toIssue(raw: RawIssue): Issue {
   };
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Endpoints                                                                 */
-/* -------------------------------------------------------------------------- */
-
-/** All issues matching the team query, following Jira's page tokens (up to MAX_PAGES). */
 export async function searchIssues(
   query: IssueQuery,
 ): Promise<{ issues: Issue[]; truncated: boolean; jql: string }> {
@@ -269,7 +276,6 @@ export async function searchIssues(
   return { issues, truncated: true, jql };
 }
 
-/** People search (real, active Atlassian accounts only — no bots or app users). */
 export async function searchUsers(query: string): Promise<JiraPerson[]> {
   await assertAuth();
   const users = await jiraFetch<RawUser[]>(
@@ -280,7 +286,6 @@ export async function searchUsers(query: string): Promise<JiraPerson[]> {
     .map(toPerson);
 }
 
-/** Fresh profiles (name + avatar) for known account IDs, 50 per request. */
 export async function getUsers(accountIds: string[]): Promise<JiraPerson[]> {
   await assertAuth();
   const BATCH = 50;
@@ -299,7 +304,6 @@ export async function getUsers(accountIds: string[]): Promise<JiraPerson[]> {
   return people;
 }
 
-/** All projects the token can see, sorted by name (max 500). */
 export async function listProjects(): Promise<JiraProject[]> {
   const BATCH = 50;
   const MAX_BATCHES = 10;
@@ -315,24 +319,18 @@ export async function listProjects(): Promise<JiraProject[]> {
   return projects;
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Name → account lookup (for team members configured by name)               */
-/* -------------------------------------------------------------------------- */
-
 export interface Resolution {
   name: string;
   match: JiraPerson | null;
   candidates: JiraPerson[];
 }
 
-/** Lowercase, punctuation → spaces: "Made Agustha I.S." → "made agustha i s". */
 const normalize = (text: string) =>
   text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
-/** Exact name match first, then a prefix match either way, then the only candidate if just one. */
 export function pickMatch(name: string, candidates: JiraPerson[]): JiraPerson | null {
   const wanted = normalize(name);
   const exact = candidates.find((person) => normalize(person.displayName) === wanted);
@@ -350,7 +348,6 @@ export async function resolveNames(names: string[]): Promise<Resolution[]> {
   for (const name of names) {
     let candidates = await searchUsers(name);
     if (!candidates.length) {
-      // Retry with the first two words (handles suffixes like "Made Agustha I.S").
       const firstTwoWords = name.split(/\s+/).slice(0, 2).join(" ");
       if (firstTwoWords !== name) candidates = await searchUsers(firstTwoWords);
     }
@@ -361,4 +358,73 @@ export async function resolveNames(names: string[]): Promise<Resolution[]> {
     });
   }
   return resolutions;
+}
+
+export interface JqlTestResult {
+  valid: boolean;
+  jql: string;
+  errors: string[];
+  warnings: string[];
+  count: number | null;
+  issues: Issue[];
+  tookMs: number;
+}
+
+const JQL_PREVIEW_SIZE = 10;
+
+function jiraMessages(error: unknown): string[] {
+  if (!(error instanceof JiraError)) return [(error as Error)?.message ?? "Unknown error."];
+  try {
+    const body = JSON.parse(error.body) as {
+      errorMessages?: string[];
+      errors?: Record<string, string>;
+      warningMessages?: string[];
+    };
+    const messages = [...(body.errorMessages ?? []), ...Object.values(body.errors ?? {})];
+    if (messages.length) return messages;
+  } catch {}
+  return [`Jira responded ${error.status}${error.body ? `: ${error.body}` : ""}`];
+}
+
+async function parseJql(jql: string) {
+  const parsed = await jiraFetch<{ queries: { errors?: string[]; warnings?: string[] }[] }>(
+    "/rest/api/3/jql/parse?validation=strict",
+    { method: "POST", body: JSON.stringify({ queries: [jql] }) },
+  );
+  return { errors: parsed.queries[0]?.errors ?? [], warnings: parsed.queries[0]?.warnings ?? [] };
+}
+
+export async function testJql(jql: string, userJql = jql): Promise<JqlTestResult> {
+  const started = Date.now();
+  const done = (result: Omit<JqlTestResult, "jql" | "tookMs">): JqlTestResult => ({
+    ...result,
+    jql,
+    tookMs: Date.now() - started,
+  });
+
+  const own = await parseJql(userJql);
+  if (own.errors.length)
+    return { ...done({ valid: false, ...own, count: null, issues: [] }), jql: userJql };
+
+  const { errors, warnings } = userJql === jql ? own : await parseJql(jql);
+  if (errors.length) return done({ valid: false, errors, warnings, count: null, issues: [] });
+
+  try {
+    const [count, preview] = await Promise.all([
+      jiraFetch<{ count: number }>("/rest/api/3/search/approximate-count", {
+        method: "POST",
+        body: JSON.stringify({ jql }),
+      })
+        .then((body) => body.count)
+        .catch(() => null),
+      jiraFetch<{ issues: RawIssue[] }>("/rest/api/3/search/jql", {
+        method: "POST",
+        body: JSON.stringify({ jql, fields: ISSUE_FIELDS, maxResults: JQL_PREVIEW_SIZE }),
+      }),
+    ]);
+    return done({ valid: true, errors: [], warnings, count, issues: preview.issues.map(toIssue) });
+  } catch (error) {
+    if (error instanceof JiraError && error.status === 401) throw error;
+    return done({ valid: false, errors: jiraMessages(error), warnings, count: null, issues: [] });
+  }
 }

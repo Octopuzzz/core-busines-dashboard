@@ -2,7 +2,6 @@ import { CircleAlert, FlaskConical } from "lucide-react";
 import { cn } from "@/lib/ui/cn";
 import { Button } from "../atoms";
 
-/** Banner under the top bar: “sample data” notice or a Jira error with Retry. */
 export function ConnectionBanner({
   kind,
   message,

@@ -1,8 +1,3 @@
-/**
- * Team storage in Postgres (server side). Called by the /api/teams routes.
- * Tables: teams, team_members, saved_views — see src/lib/db/schema.ts.
- * Only configuration lives here (teams, members, queries); Jira issues are always fetched live.
- */
 import "server-only";
 import { asc, eq, inArray } from "drizzle-orm";
 import { ensureSchema, getDb } from "@/lib/db";
@@ -11,7 +6,6 @@ import { DEFAULT_TEAMS } from "@/config/teams";
 import { series } from "@/design/tokens";
 import { DEFAULT_SETTINGS, type Group, type Member } from "./store";
 
-/** Database rows → the Group shape the browser uses. */
 function toGroup(
   team: typeof teams.$inferSelect,
   members: (typeof teamMembers.$inferSelect)[],
@@ -49,7 +43,6 @@ function toGroup(
   };
 }
 
-/** Inserts the configured teams (e.g. Core Engineering) when they don't exist yet. */
 async function seedDefaults() {
   const db = getDb();
   const configuredIds = DEFAULT_TEAMS.map((config) => config.id);
@@ -99,7 +92,6 @@ export async function listTeams(): Promise<Group[]> {
   );
 }
 
-/** Upserts a team and replaces its members and saved views, atomically. */
 export async function saveTeam(team: Group): Promise<void> {
   await ensureSchema();
   const db = getDb();
@@ -127,7 +119,6 @@ export async function saveTeam(team: Group): Promise<void> {
 
     await tx.delete(teamMembers).where(eq(teamMembers.teamId, team.id));
     const seen = new Set<string>();
-    // Member name is part of the primary key — drop accidental duplicates.
     const members = team.members.filter(
       (member) => !seen.has(member.name) && seen.add(member.name),
     );

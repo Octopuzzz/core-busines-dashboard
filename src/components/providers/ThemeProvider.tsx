@@ -4,13 +4,8 @@ import { createContext, useContext, useMemo, useSyncExternalStore } from "react"
 import { PALETTE_DARK, PALETTE_LIGHT, type ChartPalette } from "@/lib/theme";
 
 type ThemeMode = "light" | "dark";
-/** localStorage key for the chosen theme. */
 export const THEME_KEY = "kopnus.jira.theme";
 
-/**
- * Inline script run before first paint (see layout.tsx): picks the saved theme, or the OS preference,
- * so there is no light→dark flash. Kept minified because it's injected as a string.
- */
 export const themeBootScript = `try{var t=localStorage.getItem("${THEME_KEY}");if(t!=="light"&&t!=="dark"){t=matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"}document.documentElement.dataset.theme=t}catch(e){}`;
 
 const listeners = new Set<() => void>();
@@ -32,7 +27,6 @@ const ThemeContext = createContext<{ mode: ThemeMode; toggle: () => void; palett
 });
 export const useTheme = () => useContext(ThemeContext);
 
-/** Light/dark theme shared through context; also hands charts the matching colour palette. */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const mode = useSyncExternalStore(
     (onChange) => {

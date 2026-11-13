@@ -22,19 +22,15 @@ export interface Issue {
   resolved: string | null;
   due: string | null;
   labels: string[];
-  /** Parent issue (sub-task → story/task, story → epic), if any. */
   parent: { key: string; summary: string; type: string; url: string } | null;
 }
 
 export interface IssueQuery {
   accountIds: string[];
   projectKeys?: string[];
-  /** ISO date (YYYY-MM-DD). Issues updated on/after this date. */
   from?: string;
   to?: string;
-  /** Extra raw JQL, ANDed with the rest. */
   jql?: string;
-  /** accountId → display name. Only used to label sample data. */
   names?: Record<string, string>;
 }
 

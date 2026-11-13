@@ -1,7 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button, Mono } from "../atoms";
 
-/** Previous / next page buttons with “page / total”. Hidden when there is only one page. */
 export function Pagination({
   page,
   pages,

@@ -34,7 +34,6 @@ const storageUi: Record<StorageStatus["mode"], { tone: string; label: string }> 
   error: { tone: "text-overdue", label: "Database error" },
 };
 
-/** Sticky top bar: logo, Jira and storage status, theme toggle, Team and Export buttons. */
 export function TopBar({ connection, site, canExport, onExport, onTeams, storage }: Props) {
   const { mode, toggle } = useTheme();
   return (

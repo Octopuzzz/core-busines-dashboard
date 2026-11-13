@@ -42,10 +42,6 @@ interface Props {
   source: "jira" | "sample";
 }
 
-/**
- * Export dialog: choose format, title, people and which issues,
- * then build the PDF / Excel / PowerPoint file in the browser.
- */
 export function ExportDialog({
   open,
   onClose,
@@ -76,7 +72,6 @@ export function ExportDialog({
     const names = members
       .filter((member) => people.includes(member.accountId))
       .map((member) => member.displayName);
-    // Name up to three people; beyond that just count them.
     const who = names.length <= 3 ? names.join(", ") : `${names.length} people`;
     return `${group.name} · ${who}`;
   }, [group.name, members, people]);

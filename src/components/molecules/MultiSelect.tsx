@@ -16,14 +16,12 @@ interface Props {
   options: Option[];
   value: string[];
   onChange: (v: string[]) => void;
-  /** Shown when nothing is selected, e.g. "Everyone". */
   allLabel: string;
   icon?: React.ReactNode;
   searchPlaceholder?: string;
   className?: string;
 }
 
-/** Dropdown with checkboxes for picking several options; shows a filter box for long lists. */
 export function MultiSelect({
   options,
   value,
@@ -47,7 +45,6 @@ export function MultiSelect({
     );
   };
 
-  // Trigger text: "Everyone" / the single selected label / "3 selected".
   let summary = `${value.length} selected`;
   if (value.length === 0) summary = allLabel;
   else if (value.length === 1) {

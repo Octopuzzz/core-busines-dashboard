@@ -7,7 +7,6 @@ interface Props {
   children: React.ReactNode;
 }
 
-/** Card container with a title row (and optional hint on the right) used for charts and the issue list. */
 export function Panel({ title, hint, className, children }: Props) {
   return (
     <section

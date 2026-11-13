@@ -10,7 +10,6 @@ import { Popover } from "./Popover";
 const dateInput =
   "h-9 w-full rounded-md border border-line bg-surface px-2.5 font-mono text-[13px] text-ink outline-none focus:border-accent focus:ring-3 focus:ring-accent/15";
 
-/** Date-range picker: rolling presets (“Last 90 days”) or fixed From/To dates. */
 export function DateRange({
   value,
   onChange,
@@ -21,7 +20,6 @@ export function DateRange({
   const dates = rangeDates(value);
   const today = dayjs().format("YYYY-MM-DD");
 
-  // Typing a custom date switches from a rolling preset to fixed dates.
   const setFrom = (from: string) => {
     if (from) onChange({ from, to: dates?.to ?? today });
   };

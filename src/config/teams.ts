@@ -1,8 +1,3 @@
-/**
- * Saved teams. Each member has their Jira display name and account ID (looked up 2026-11-12),
- * so the team works in any browser without a lookup. Members without an accountId are
- * looked up by name on first load.
- */
 export interface TeamMemberConfig {
   name: string;
   accountId?: string;

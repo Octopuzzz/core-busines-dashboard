@@ -1,11 +1,11 @@
 import { connection } from "next/server";
-import { JiraError, jiraConfigured, whoAmI } from "@/lib/jira/server";
+import { JiraError, getJiraConfig, whoAmI } from "@/lib/jira/server";
 
 export async function GET() {
-  await connection(); // live data: never pre-render at build time
-  if (!jiraConfigured())
-    return Response.json({ configured: false, site: null, authOk: false, error: null });
-  const site = process.env.JIRA_BASE_URL ?? null;
+  await connection();
+  const config = await getJiraConfig();
+  if (!config) return Response.json({ configured: false, site: null, authOk: false, error: null });
+  const site = config.baseUrl;
   try {
     const me = await whoAmI();
     return Response.json({

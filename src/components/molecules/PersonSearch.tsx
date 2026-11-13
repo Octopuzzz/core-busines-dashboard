@@ -13,16 +13,12 @@ const DEBOUNCE_MS = 250;
 
 interface Props {
   onPick: (person: JiraPerson) => void;
-  /** Text on the full-width trigger button. */
   placeholder: string;
   icon: React.ReactNode;
-  /** Small "Link" button instead of the full-width trigger (used on unlinked member rows). */
   compact?: boolean;
-  /** Pre-filled search text, e.g. the member's configured name. */
   initial?: string;
 }
 
-/** Searches Jira users (debounced) in a popover and returns the picked person. Used in the team sheet. */
 export function PersonSearch({ onPick, placeholder, icon, compact, initial = "" }: Props) {
   const [query, setQuery] = useState(initial);
   const [results, setResults] = useState<JiraPerson[]>([]);
@@ -57,7 +53,7 @@ export function PersonSearch({ onPick, placeholder, icon, compact, initial = "" 
     if (compact) {
       const openAndSearch = () => {
         toggle();
-        if (!open) search(query); // run the pre-filled search straight away
+        if (!open) search(query);
       };
       return (
         <Button variant="secondary" size="sm" icon={icon} onClick={openAndSearch}>

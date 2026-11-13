@@ -8,7 +8,6 @@ const tone: Record<StatusCategory | "overdue", string> = {
   overdue: "bg-overdue",
 };
 
-/** Coloured dot for a status category (to do / in progress / done / overdue). */
 export function StatusDot({
   category,
   className,

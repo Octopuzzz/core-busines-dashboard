@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   }
   if (!Array.isArray(query.accountIds) || query.accountIds.length === 0) {
     return Response.json({
-      source: jiraConfigured() ? "jira" : "sample",
+      source: (await jiraConfigured()) ? "jira" : "sample",
       issues: [],
       truncated: false,
       jql: "",
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   if (query.accountIds.length > 200)
     return Response.json({ error: "Too many people (max 200)." }, { status: 400 });
 
-  if (!jiraConfigured()) {
+  if (!(await jiraConfigured())) {
     return Response.json({
       source: "sample",
       issues: sampleIssues(query),

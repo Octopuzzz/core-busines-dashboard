@@ -24,11 +24,6 @@ interface Pos {
 const GAP = 6;
 const MARGIN = 12;
 
-/**
- * Click-to-open floating panel, rendered in a portal so it is never clipped by
- * scrolling containers (dialogs, sheets, tables). Flips upward when there is no
- * room below and stays inside the viewport. Closes on outside click and Escape.
- */
 export function Popover({ trigger, children, align = "start", className }: Props) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<Pos | null>(null);
@@ -43,11 +38,10 @@ export function Popover({ trigger, children, align = "start", className }: Props
     const spaceBelow = viewportHeight - anchorRect.bottom - GAP - MARGIN;
     const spaceAbove = anchorRect.top - GAP - MARGIN;
     const wantedHeight = panel.current?.scrollHeight ?? 320;
-    // Open upward only when there's clearly more room above than below.
     const up = spaceBelow < Math.min(wantedHeight, 280) && spaceAbove > spaceBelow;
     const width = panel.current?.offsetWidth ?? anchorRect.width;
     let left = align === "end" ? anchorRect.right - width : anchorRect.left;
-    left = Math.max(MARGIN, Math.min(left, viewportWidth - width - MARGIN)); // keep on screen
+    left = Math.max(MARGIN, Math.min(left, viewportWidth - width - MARGIN));
     setPos({
       top: up ? anchorRect.top - GAP : anchorRect.bottom + GAP,
       left,
@@ -60,7 +54,6 @@ export function Popover({ trigger, children, align = "start", className }: Props
   useLayoutEffect(() => {
     if (!open) return;
     place();
-    // Second pass once the panel has its real size.
     const raf = requestAnimationFrame(place);
     return () => cancelAnimationFrame(raf);
   }, [open, place]);
@@ -72,7 +65,6 @@ export function Popover({ trigger, children, align = "start", className }: Props
       const inside = anchor.current?.contains(target) || panel.current?.contains(target);
       if (!inside) setOpen(false);
     };
-    // Capture phase + stopPropagation: Escape closes this popover without also closing a parent dialog.
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       event.stopPropagation();
@@ -105,7 +97,6 @@ export function Popover({ trigger, children, align = "start", className }: Props
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: pos?.up ? 4 : -4, scale: 0.98 }}
                 transition={{ duration: motionTokens.fast, ease: motionTokens.ease }}
-                // Position is measured at runtime from the trigger; Tailwind can't express it statically.
                 style={
                   pos
                     ? {

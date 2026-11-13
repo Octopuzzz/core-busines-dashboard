@@ -1,6 +1,5 @@
 import { cn } from "@/lib/ui/cn";
 
-/** Small spinning loading indicator. */
 export function Spinner({ className }: { className?: string }) {
   return (
     <span

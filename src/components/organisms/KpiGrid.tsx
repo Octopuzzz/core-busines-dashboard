@@ -13,28 +13,42 @@ type KpiTone = "ink" | "accent" | "done" | "overdue";
 interface Kpi {
   label: string;
   value: number;
-  /** Turns the (possibly mid-animation) number into display text. */
   format: (value: number) => string;
   foot?: string;
   tone?: KpiTone;
-  /** 0–1; shows a progress bar instead of the footnote. */
   progress?: number;
+  key: keyof Pick<Metrics, "total" | "open" | "done" | "overdue"> | null;
 }
 
 const wholeNumber = (value: number) => `${Math.round(value)}`;
 
 function buildKpis(metrics: Metrics): Kpi[] {
   return [
-    { label: "Total issues", value: metrics.total, format: wholeNumber, foot: "in current scope" },
     {
+      key: "total",
+      label: "Total issues",
+      value: metrics.total,
+      format: wholeNumber,
+      foot: "in current scope",
+    },
+    {
+      key: "open",
       label: "Open",
       value: metrics.open,
       format: wholeNumber,
       foot: "to do + in progress",
       tone: "accent",
     },
-    { label: "Done", value: metrics.done, format: wholeNumber, foot: "resolved", tone: "done" },
     {
+      key: "done",
+      label: "Done",
+      value: metrics.done,
+      format: wholeNumber,
+      foot: "resolved",
+      tone: "done",
+    },
+    {
+      key: "overdue",
       label: "Overdue",
       value: metrics.overdue,
       format: wholeNumber,
@@ -42,12 +56,14 @@ function buildKpis(metrics: Metrics): Kpi[] {
       tone: metrics.overdue ? "overdue" : "ink",
     },
     {
+      key: null,
       label: "Completion",
       value: metrics.completionRate * 100,
       format: (value) => `${Math.round(value)}%`,
       progress: metrics.completionRate,
     },
     {
+      key: null,
       label: "Avg. cycle",
       value: metrics.avgCycleDays ?? 0,
       format: (value) => (metrics.avgCycleDays == null ? "—" : `${value.toFixed(1)}d`),
@@ -56,13 +72,11 @@ function buildKpis(metrics: Metrics): Kpi[] {
   ];
 }
 
-/** The six headline numbers above the charts. Numbers count up/down with GSAP when filters change. */
-export function KpiGrid({ metrics }: { metrics: Metrics }) {
+export function KpiGrid({ metrics, deltaFrom }: { metrics: Metrics; deltaFrom?: Metrics | null }) {
   const root = useRef<HTMLDivElement>(null);
   const previousValues = useRef<number[]>([]);
   const kpis = buildKpis(metrics);
 
-  // Entrance animation — runs once.
   useGSAP(
     () => {
       gsap.set("[data-kpi-bar]", { scaleX: 0 });
@@ -85,7 +99,6 @@ export function KpiGrid({ metrics }: { metrics: Metrics }) {
     { scope: root },
   );
 
-  // Count from the previous numbers to the new ones on every change.
   useGSAP(
     () => {
       gsap.utils.toArray<HTMLElement>("[data-kpi-value]").forEach((element, index) => {
@@ -121,6 +134,7 @@ export function KpiGrid({ metrics }: { metrics: Metrics }) {
           foot={kpi.foot}
           tone={kpi.tone}
           progress={kpi.progress}
+          delta={deltaFrom && kpi.key ? metrics[kpi.key] - deltaFrom[kpi.key] : null}
         />
       ))}
     </div>
