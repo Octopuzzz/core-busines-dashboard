@@ -5,6 +5,8 @@ import type { StorageStatus } from "@/lib/groups/store";
 import { cn } from "@/lib/ui/cn";
 import { Button } from "../atoms";
 import { useTheme } from "../providers/ThemeProvider";
+import Image from "next/image";
+import logo from "@/assets/logo.jpg";
 
 export type Connection = "live" | "sample" | "error" | "checking";
 
@@ -39,12 +41,14 @@ export function TopBar({ connection, site, canExport, onExport, onTeams, storage
   return (
     <header className="sticky top-0 z-30 -mx-4 mb-6 flex items-center gap-3 border-b border-line bg-bg/80 px-4 py-3 backdrop-blur-md backdrop-saturate-150 sm:-mx-6 sm:px-6">
       <div className="flex min-w-0 items-center gap-2.5">
-        <div
-          title="Kopnus logo goes here"
-          className="grid size-8 shrink-0 place-items-center rounded-md border border-dashed border-line-strong text-[9px] text-muted"
-        >
-          logo
-        </div>
+        <Image
+          src={logo}
+          alt="Team Pulse"
+          width={32}
+          height={32}
+          priority
+          className="size-8 shrink-0 rounded-md object-cover ring-1 ring-line"
+        />
         <div className="min-w-0">
           <div className="truncate text-[15px] font-semibold tracking-tight text-ink">
             Team Pulse
