@@ -1,0 +1,32 @@
+# Run on the Ubuntu VM (needs .env.production next to this file):
+#   docker compose pull && docker compose up -d
+#
+# Set the image to your Docker Hub repo: YOUR_DOCKERHUB_USERNAME/team-pulse:latest
+services:
+  team-pulse:
+    image: ${TEAM_PULSE_IMAGE:-YOUR_DOCKERHUB_USERNAME/team-pulse:latest}
+    container_name: team-pulse
+    restart: unless-stopped
+    env_file: .env.production
+    # Join Docker's default bridge network (172.17.0.0/16) so the app can reach Postgres at
+    # 172.17.0.5:5432. Compose's own network is isolated from it.
+    network_mode: bridge
+    ports:
+      - "3000:3000"
+    read_only: true # the app never writes to its own filesystem…
+    tmpfs:
+      - /tmp # …except temp files
+      - /app/.next/cache # …and Next's runtime cache
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
